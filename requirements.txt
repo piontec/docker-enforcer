@@ -7,6 +7,7 @@ Jinja2==2.8
 MarkupSafe==0.23
 pkg-resources==0.0.0
 requests==2.10.0
+Rx==1.5.2
 six==1.10.0
 websocket-client==0.37.0
 Werkzeug==0.11.11
