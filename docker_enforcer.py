@@ -6,10 +6,14 @@ from logging import StreamHandler
 
 from flask import Flask
 from rx import Observable
+from dockerenforcer.config import Config
+from dockerenforcer.docker_fetcher import DockerFetcher
 
 
 padlock = threading.Lock()
 counter = 0
+config = Config()
+fetcher = DockerFetcher(config)
 
 
 def create_app():
@@ -25,11 +29,12 @@ def create_app():
 
     def run_detection(_1, _2):
         flask_app.logger.debug("Starting checks of docker containers")
+        fetcher.check_containers()
         global counter
         with padlock:
             counter += 1
 
-    detections = Observable.interval(1000).map(run_detection)
+    detections = Observable.interval(config.interval_sec).map(run_detection)
     subscription = detections.subscribe(print)
 
     def on_exit(sig, frame):
