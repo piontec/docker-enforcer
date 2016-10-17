@@ -7,7 +7,7 @@ from rx import Observer
 
 from dockerenforcer.config import Mode
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("docker_enforcer")
 
 
 class Status:

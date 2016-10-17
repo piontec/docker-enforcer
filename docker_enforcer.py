@@ -32,6 +32,7 @@ def create_app():
         handler.setFormatter(formatter)
         flask_app.logger.addHandler(handler)
         flask_app.logger.setLevel(logging.DEBUG)
+        flask_app.logger.name = "docker_enforcer"
 
     flask_app = Flask(__name__)
     if not flask_app.debug:
@@ -39,12 +40,9 @@ def create_app():
 
     detections = Observable.interval(config.interval_sec * 1000) \
         .map(lambda _: fetcher.check_containers()) \
-        .dump(name="1") \
         .flat_map(lambda c: c) \
-        .dump(name="2") \
         .where(lambda container: fetcher.should_be_killed(container)) \
         .where(lambda container: not_on_white_list(container))
-
     subscription = detections.subscribe(jurek)
 
     def on_exit(sig, frame):
