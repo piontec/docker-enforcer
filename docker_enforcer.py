@@ -5,6 +5,7 @@ import threading
 from logging import StreamHandler
 
 from flask import Flask
+from flask import Response
 from rx import Observable
 from rx.linq.observable.interval import interval
 from rx.testing.dump import dump
@@ -64,4 +65,5 @@ app = create_app()
 
 @app.route('/')
 def hello_world():
-    return 'Hello, World! '
+    data = jurek.get_stats().to_prometheus_stats_format()
+    return Response(data, content_type="text/plain; version=0.0.4")

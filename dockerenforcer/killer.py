@@ -29,6 +29,19 @@ class Status:
             res = Status(self.__counter, deepcopy(self.__killed_containers), self.__last_killing_timestamp)
         return res
 
+    def to_prometheus_stats_format(self):
+        with self.__padlock:
+            res = """
+# HELP containers_stopped_total The total number of docker containers stopped.
+# TYPE containers_stopped_total counter
+containers_stopped_total {0}
+
+# HELP containers_stopped_last_timestamp The timestamp of last event of stopping a container
+# TYPE containers_stopped_last_timestamp gauge
+containers_stopped_last_timestamp {1}
+""".format(self.__counter, self.__last_killing_timestamp)
+        return res
+
 
 class Killer(Observer):
     def __init__(self, manager, mode):
