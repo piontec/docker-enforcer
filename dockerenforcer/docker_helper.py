@@ -12,7 +12,7 @@ class Container:
         return self.params['Name'] if self.params['Name'] else self.cid
 
 
-class DockerFetcher:
+class DockerHelper:
     def __init__(self, config, rules):
         super().__init__()
         self.__rules = rules

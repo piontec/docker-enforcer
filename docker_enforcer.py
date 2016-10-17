@@ -1,23 +1,20 @@
 import logging
 import signal
 import sys
-import threading
 from logging import StreamHandler
 
 from flask import Flask
 from flask import Response
 from rx import Observable
-from rx.linq.observable.interval import interval
-from rx.testing.dump import dump
 
 from dockerenforcer.config import Config
-from dockerenforcer.docker_fetcher import DockerFetcher
+from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.rules import rules
 from dockerenforcer.killer import Killer
 
 
 config = Config()
-fetcher = DockerFetcher(config, rules)
+fetcher = DockerHelper(config, rules)
 jurek = Killer(fetcher, config.mode)
 
 
@@ -27,15 +24,18 @@ def not_on_white_list(container):
 
 
 def create_app():
-    flask_app = Flask(__name__)
 
-    if not flask_app.debug:
+    def setup_logging():
         handler = StreamHandler(stream=sys.stdout)
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         flask_app.logger.addHandler(handler)
         flask_app.logger.setLevel(logging.DEBUG)
+
+    flask_app = Flask(__name__)
+    if not flask_app.debug:
+        setup_logging()
 
     detections = Observable.interval(config.interval_sec * 1000) \
         .map(lambda _: fetcher.check_containers()) \
@@ -45,7 +45,6 @@ def create_app():
         .where(lambda container: fetcher.should_be_killed(container)) \
         .where(lambda container: not_on_white_list(container))
 
-    # remove self
     subscription = detections.subscribe(jurek)
 
     def on_exit(sig, frame):
