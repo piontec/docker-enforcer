@@ -6,14 +6,22 @@ from logging import StreamHandler
 
 from flask import Flask
 from rx import Observable
+from rx.linq.observable.interval import interval
+from rx.testing.dump import dump
+
 from dockerenforcer.config import Config
 from dockerenforcer.docker_fetcher import DockerFetcher
-
+from dockerenforcer.rules import rules
 
 padlock = threading.Lock()
 counter = 0
 config = Config()
-fetcher = DockerFetcher(config)
+fetcher = DockerFetcher(config, rules)
+
+
+def not_on_white_list(container):
+    return container.params and container.params['Name'] \
+        and container.params['Name'] not in config.white_list
 
 
 def create_app():
@@ -27,15 +35,16 @@ def create_app():
         flask_app.logger.addHandler(handler)
         flask_app.logger.setLevel(logging.DEBUG)
 
-    def run_detection(_1, _2):
-        flask_app.logger.debug("Starting checks of docker containers")
-        fetcher.check_containers()
-        global counter
-        with padlock:
-            counter += 1
+    detections = Observable.interval(config.interval_sec * 1000) \
+        .map(lambda _: fetcher.check_containers()) \
+        .dump(name="1") \
+        .flat_map(lambda c: c) \
+        .dump(name="2") \
+        .where(lambda container: fetcher.should_be_killed(container)) \
+        .where(lambda container: not_on_white_list(container))
 
-    detections = Observable.interval(config.interval_sec).map(run_detection)
-    subscription = detections.subscribe(print)
+    # remove self
+    subscription = detections.subscribe(lambda c: print(c))
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
@@ -47,6 +56,7 @@ def create_app():
     signal.signal(signal.SIGTERM, on_exit)
 
     return flask_app
+
 
 app = create_app()
 
