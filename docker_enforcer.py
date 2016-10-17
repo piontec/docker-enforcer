@@ -12,11 +12,12 @@ from rx.testing.dump import dump
 from dockerenforcer.config import Config
 from dockerenforcer.docker_fetcher import DockerFetcher
 from dockerenforcer.rules import rules
+from dockerenforcer.killer import Killer
 
-padlock = threading.Lock()
-counter = 0
+
 config = Config()
 fetcher = DockerFetcher(config, rules)
+jurek = Killer(fetcher, config.mode)
 
 
 def not_on_white_list(container):
@@ -44,7 +45,7 @@ def create_app():
         .where(lambda container: not_on_white_list(container))
 
     # remove self
-    subscription = detections.subscribe(lambda c: print(c))
+    subscription = detections.subscribe(jurek)
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
@@ -63,6 +64,4 @@ app = create_app()
 
 @app.route('/')
 def hello_world():
-    with padlock:
-        val = counter
-    return 'Hello, World! {0}'.format(val)
+    return 'Hello, World! '

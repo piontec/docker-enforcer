@@ -34,9 +34,9 @@ class DockerFetcher:
             return False
 
         for rule in self.__rules:
-            res = rule(container)
-            if res:
+            if rule(container):
                 return True
         return False
 
-
+    def kill_container(self, container):
+        self.__client.stop(container.params['Id'])
