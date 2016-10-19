@@ -1,4 +1,5 @@
 from enum import Enum
+import os
 
 
 class Mode(Enum):
@@ -7,9 +8,10 @@ class Mode(Enum):
 
 
 class Config:
-    interval_sec = 5
-    docker_socket = 'unix:///var/run/docker.sock'
-    white_list = [
-        'docker_enforcer',
-    ]
-    mode = Mode.Warn
+
+    def __init__(self):
+        super().__init__()
+        self.interval_sec = int(os.getenv('CHECK_INTERVAL_S', '60'))
+        self.docker_socket = os.getenv('DOCKER_SOCKET', 'unix:///var/run/docker.sock')
+        self.white_list = os.getenv('WHITE_LIST', 'docker-enforcer docker_enforcer').split()
+        self.mode = Mode[os.getenv('MODE', 'WARN').lower().capitalize()]
