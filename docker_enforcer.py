@@ -60,7 +60,13 @@ def create_app():
 app = create_app()
 
 
-@app.route('/')
-def hello_world():
+@app.route('/metrics')
+def show_metrics():
     data = jurek.get_stats().to_prometheus_stats_format()
     return Response(data, content_type="text/plain; version=0.0.4")
+
+
+@app.route('/')
+def show_stats():
+    data = jurek.get_stats().to_json_detail_stats()
+    return Response(data, content_type="application/json")

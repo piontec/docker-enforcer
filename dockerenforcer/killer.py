@@ -10,37 +10,55 @@ from dockerenforcer.config import Mode
 logger = logging.getLogger("docker_enforcer")
 
 
-class Status:
-    def __init__(self, counter=0, killed_containers=None, last_killing_timestamp=None):
+class Stat:
+    def __init__(self):
+        super().__init__()
+        self.counter = 1
+        self.last_timestamp = datetime.datetime.utcnow()
+
+    def __str__(self, *args, **kwargs):
+        return "{0} - {1}".format(self.counter, self.last_timestamp)
+
+
+class StatusDictionary:
+    def __init__(self, killed_containers=None):
         super().__init__()
         self.__padlock = threading.Lock()
-        self.__counter = counter
-        self.__killed_containers = killed_containers if killed_containers else []
-        self.__last_killing_timestamp = last_killing_timestamp
+        self.__killed_containers = killed_containers if killed_containers else {}
 
     def register_killed(self, container):
         with self.__padlock:
-            self.__counter += 1
-            self.__killed_containers.append(container)
-            self.__last_killing_timestamp = datetime.datetime.utcnow()
+            if container.cid in self.__killed_containers.keys():
+                self.__killed_containers[container.cid].counter += 1
+                self.__killed_containers[container.cid].last_timestamp = datetime.datetime.utcnow()
+            else:
+                self.__killed_containers[container.cid] = Stat()
 
     def copy(self):
         with self.__padlock:
-            res = Status(self.__counter, deepcopy(self.__killed_containers), self.__last_killing_timestamp)
+            res = StatusDictionary(deepcopy(self.__killed_containers))
         return res
 
     def to_prometheus_stats_format(self):
         with self.__padlock:
-            res = """
-# HELP containers_stopped_total The total number of docker containers stopped.
+            res = """# HELP containers_stopped_total The total number of docker containers stopped.
 # TYPE containers_stopped_total counter
 containers_stopped_total {0}
-
-# HELP containers_stopped_last_timestamp The timestamp of last event of stopping a container
-# TYPE containers_stopped_last_timestamp gauge
-containers_stopped_last_timestamp {1}
-""".format(self.__counter, self.__last_killing_timestamp)
+""".format(len(self.__killed_containers))
         return res
+
+    def to_json_detail_stats(self):
+        str_list = ""
+        with self.__padlock:
+            is_first = True
+            for k, v in self.__killed_containers.items():
+                if not is_first:
+                    str_list += ",\n"
+                else:
+                    is_first = False
+                str_list += "{{ \"id\": \"{0}\", \"count\": {1}, \"last_timestamp\": \"{2}\" }}"\
+                    .format(k, v.counter, v.last_timestamp.isoformat())
+            return "[{0}]".format(str_list)
 
 
 class Killer(Observer):
@@ -48,7 +66,7 @@ class Killer(Observer):
         super().__init__()
         self.__mode = mode
         self.__manager = manager
-        self.__status = Status()
+        self.__status = StatusDictionary()
 
     def on_next(self, container):
         # TODO: needs to be more explaining, why killing is performed
