@@ -61,6 +61,29 @@ containers_stopped_total {0}
             return "[{0}]".format(str_list)
 
 
+class Verdict:
+    def __init__(self, verdict, container, reason):
+        super().__init__()
+        self.reason = reason
+        self.container = container
+        self.verdict = verdict
+
+
+class Judge:
+    def __init__(self, rules):
+        super().__init__()
+        self.__rules = rules
+
+    def should_be_killed(self, container):
+        if not (container and container.params and container.metrics):
+            return Verdict(False, container, None)
+
+        for rule in self.__rules:
+            if rule['rule'](container):
+                return Verdict(True, container, rule['name'])
+        return Verdict(False, container, None)
+
+
 class Killer(Observer):
     def __init__(self, manager, mode):
         super().__init__()
@@ -68,14 +91,13 @@ class Killer(Observer):
         self.__manager = manager
         self.__status = StatusDictionary()
 
-    def on_next(self, container):
-        # TODO: needs to be more explaining, why killing is performed
-        # TODO: logging doesn't work
-        logger.info("Container {0} is detected to violate one of the rules. {1} the container [{2} mode]"
-                    .format(container, "Not stopping" if self.__mode == Mode.Warn else "Stopping", self.__mode))
-        self.__status.register_killed(container)
+    def on_next(self, verdict):
+        logger.info("Container {0} is detected to violate the rule \"{1}\". {2} the container [{3} mode]"
+                    .format(verdict.container, verdict.reason,
+                            "Not stopping" if self.__mode == Mode.Warn else "Stopping", self.__mode))
+        self.__status.register_killed(verdict.container)
         if self.__mode == Mode.Kill:
-            self.__manager.kill_container(container)
+            self.__manager.kill_container(verdict.container)
 
     def on_error(self, e):
         logger.warn("An error occurred while trying to check running containers")

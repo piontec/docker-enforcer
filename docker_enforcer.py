@@ -10,11 +10,11 @@ from rx import Observable
 from dockerenforcer.config import Config
 from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.rules import rules
-from dockerenforcer.killer import Killer
-
+from dockerenforcer.killer import Killer, Judge
 
 config = Config()
-fetcher = DockerHelper(config, rules)
+fetcher = DockerHelper(config)
+judge = Judge(rules)
 jurek = Killer(fetcher, config.mode)
 
 
@@ -41,8 +41,9 @@ def create_app():
     detections = Observable.interval(config.interval_sec * 1000) \
         .map(lambda _: fetcher.check_containers()) \
         .flat_map(lambda c: c) \
-        .where(lambda container: fetcher.should_be_killed(container)) \
-        .where(lambda container: not_on_white_list(container))
+        .map(lambda container: judge.should_be_killed(container)) \
+        .where(lambda v: v.verdict) \
+        .where(lambda v: not_on_white_list(v.container))
     subscription = detections.subscribe(jurek)
 
     def on_exit(sig, frame):

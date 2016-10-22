@@ -13,9 +13,8 @@ class Container:
 
 
 class DockerHelper:
-    def __init__(self, config, rules):
+    def __init__(self, config):
         super().__init__()
-        self.__rules = rules
         self.__config = config
         self.__client = Client(base_url=config.docker_socket)
 
@@ -28,15 +27,6 @@ class DockerHelper:
             metrics = self.__client.stats(container=container_id, decode=True, stream=False)
             res.append(Container(container_id, params, metrics))
         return res
-
-    def should_be_killed(self, container):
-        if not (container and container.params and container.metrics):
-            return False
-
-        for rule in self.__rules:
-            if rule(container):
-                return True
-        return False
 
     def kill_container(self, container):
         self.__client.stop(container.params['Id'])
