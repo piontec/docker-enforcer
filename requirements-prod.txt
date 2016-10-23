@@ -1,0 +1,3 @@
+-r requirements.txt
+gunicorn==19.6.0
+
