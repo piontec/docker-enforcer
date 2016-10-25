@@ -1,3 +1,5 @@
+import inspect
+import json
 import logging
 import signal
 import sys
@@ -20,11 +22,10 @@ jurek = Killer(fetcher, config.mode)
 
 def not_on_white_list(container):
     return container.params and container.params['Name'] \
-        and container.params['Name'] not in config.white_list
+           and container.params['Name'] not in config.white_list
 
 
 def create_app():
-
     def setup_logging():
         handler = StreamHandler(stream=sys.stdout)
         handler.setLevel(logging.DEBUG)
@@ -59,6 +60,14 @@ def create_app():
 
 
 app = create_app()
+
+
+@app.route('/rules')
+def show_rules():
+    rules_txt = [{"name": d["name"], "rule": inspect.getsource(d["rule"]).strip().split(':', 1)[1].strip()} for d in
+                 rules]
+    data = json.dumps(rules_txt)
+    return Response(data, content_type="application/json")
 
 
 @app.route('/metrics')
