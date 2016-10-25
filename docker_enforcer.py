@@ -11,8 +11,8 @@ from rx import Observable
 
 from dockerenforcer.config import Config
 from dockerenforcer.docker_helper import DockerHelper
-from dockerenforcer.rules import rules
 from dockerenforcer.killer import Killer, Judge
+from rules.rules import rules
 
 config = Config()
 fetcher = DockerHelper(config)
