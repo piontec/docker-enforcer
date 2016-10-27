@@ -2,8 +2,9 @@ from docker import Client
 
 
 class Container:
-    def __init__(self, cid, params, metrics):
+    def __init__(self, cid, params, metrics, position):
         super().__init__()
+        self.position = position
         self.metrics = metrics
         self.params = params
         self.cid = cid
@@ -21,11 +22,14 @@ class DockerHelper:
     def check_containers(self):
         res = []
 
-        ids = [container['Id'] for container in self.__client.containers()]
+        containers = sorted(self.__client.containers(), key=lambda c: c["Created"])
+        ids = [container['Id'] for container in containers]
+        counter = 0
         for container_id in ids:
             params = self.__client.inspect_container(container_id)
             metrics = self.__client.stats(container=container_id, decode=True, stream=False)
-            res.append(Container(container_id, params, metrics))
+            counter += 1
+            res.append(Container(container_id, params, metrics, counter))
         return res
 
     def kill_container(self, container):
