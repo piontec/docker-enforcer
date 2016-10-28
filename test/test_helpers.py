@@ -3,21 +3,21 @@ from dockerenforcer.killer import Judge
 
 
 class RulesTestHelper:
-    def __init__(self, rules):
+    def __init__(self, rules, container_count=1, mem_limit=0, cpu_share=0, cpu_period=0, cpu_quota=0):
         self.judge = Judge(rules)
         cid = '7de82a4e90f1bd4fd022bcce298e7277b8aec009e222892e44769d6c636b8205'
         params = {'Image': 'sha256:47bcc53f74dc94b1920f0b34f6036096526296767650f223433fe65c35f149eb',
                   'HostConfig': {'Isolation': '', 'IOMaximumBandwidth': 0, 'CpuPercent': 0, 'ReadonlyRootfs': False,
-                                 'CpuQuota': 0, 'IpcMode': '', 'RestartPolicy': {'Name': 'no', 'MaximumRetryCount': 0},
+                                 'CpuQuota': cpu_quota, 'IpcMode': '', 'RestartPolicy': {'Name': 'no', 'MaximumRetryCount': 0},
                                  'BlkioDeviceWriteIOps': None, 'PidMode': '', 'BlkioDeviceWriteBps': None,
                                  'PortBindings': {'8080/tcp': [{'HostIp': '', 'HostPort': '8080'}]},
                                  'BlkioDeviceReadIOps': None, 'ContainerIDFile': '', 'ConsoleSize': [0, 0],
                                  'IOMaximumIOps': 0, 'ShmSize': 67108864, 'GroupAdd': None, 'Cgroup': '',
                                  'DiskQuota': 0, 'DnsSearch': [], 'BlkioWeight': 0, 'Dns': [], 'OomKillDisable': False,
-                                 'CpuPeriod': 0, 'DnsOptions': [], 'NetworkMode': 'default', 'CpuCount': 0,
-                                 'KernelMemory': 0, 'Links': None, 'Memory': 536870912, 'VolumesFrom': None,
+                                 'CpuPeriod': cpu_period, 'DnsOptions': [], 'NetworkMode': 'default', 'CpuCount': 0,
+                                 'KernelMemory': 0, 'Links': None, 'Memory': mem_limit, 'VolumesFrom': None,
                                  'MemorySwap': -1, 'Ulimits': None, 'UsernsMode': '', 'Devices': [], 'CpusetMems': '',
-                                 'MemorySwappiness': -1, 'Privileged': False, 'CpuShares': 0, 'CpusetCpus': '',
+                                 'MemorySwappiness': -1, 'Privileged': False, 'CpuShares': cpu_share, 'CpusetCpus': '',
                                  'VolumeDriver': '', 'SecurityOpt': None, 'OomScoreAdj': 0, 'PublishAllPorts': False,
                                  'AutoRemove': False, 'MemoryReservation': 0, 'BlkioDeviceReadBps': None,
                                  'PidsLimit': 0, 'Runtime': 'runc', 'UTSMode': '', 'Binds': ['/:/tmp'], 'CapDrop': None,
@@ -90,7 +90,9 @@ class RulesTestHelper:
                                                                    520620, 2516400]}}, 'networks': {
                 'eth0': {'rx_dropped': 0, 'tx_packets': 7, 'rx_bytes': 8719, 'tx_dropped': 0, 'rx_errors': 0,
                          'tx_bytes': 578, 'rx_packets': 80, 'tx_errors': 0}}, 'read': '2016-10-27T19:30:13.751688232Z'}
-        self.container = Container(cid, params, metrics, 1)
+        self.containers = []
+        for cnt in range(container_count):
+            self.containers.append(Container(cid, params, metrics, cnt))
 
-    def get_verdict(self):
-        return self.judge.should_be_killed(self.container)
+    def get_verdicts(self):
+        return list(map(lambda c: self.judge.should_be_killed(c), self.containers))
