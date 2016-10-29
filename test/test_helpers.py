@@ -1,9 +1,11 @@
+import unittest
+
 from dockerenforcer.docker_helper import Container
 from dockerenforcer.killer import Judge
 
 
 class RulesTestHelper:
-    def __init__(self, rules, container_count=1, mem_limit=0, cpu_share=0, cpu_period=0, cpu_quota=0):
+    def __init__(self, rules, container_count=1, mem_limit=0, cpu_share=0, cpu_period=0, cpu_quota=0, mem_usage=0):
         self.judge = Judge(rules)
         cid = '7de82a4e90f1bd4fd022bcce298e7277b8aec009e222892e44769d6c636b8205'
         params = {'Image': 'sha256:47bcc53f74dc94b1920f0b34f6036096526296767650f223433fe65c35f149eb',
@@ -63,7 +65,7 @@ class RulesTestHelper:
         metrics = {'blkio_stats': {'io_wait_time_recursive': [], 'io_serviced_recursive': [], 'io_merged_recursive': [],
                                    'io_queue_recursive': [], 'io_service_time_recursive': [], 'sectors_recursive': [],
                                    'io_time_recursive': [], 'io_service_bytes_recursive': []},
-                   'memory_stats': {'limit': 536870912, 'usage': 294912,
+                   'memory_stats': {'limit': 536870912, 'usage': mem_usage,
                                     'stats': {'total_active_file': 0, 'pgfault': 318,
                                               'hierarchical_memory_limit': 536870912, 'total_pgfault': 318,
                                               'mapped_file': 0, 'total_rss': 32768, 'pgmajfault': 0,
@@ -96,3 +98,7 @@ class RulesTestHelper:
 
     def get_verdicts(self):
         return list(map(lambda c: self.judge.should_be_killed(c), self.containers))
+
+
+
+
