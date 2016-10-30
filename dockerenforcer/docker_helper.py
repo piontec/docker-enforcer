@@ -32,5 +32,13 @@ class DockerHelper:
             res.append(Container(container_id, params, metrics, counter))
         return res
 
+    def get_start_events_observable(self):
+        return self.__client.events(filters={"event": "start"}, decode=True)
+
+    def check_container(self, container_id):
+        params = self.__client.inspect_container(container_id)
+        metrics = self.__client.stats(container=container_id, decode=True, stream=False)
+        return Container(container_id, params, metrics, 0)
+
     def kill_container(self, container):
         self.__client.stop(container.params['Id'])

@@ -8,6 +8,7 @@ from logging import StreamHandler
 from flask import Flask
 from flask import Response
 from rx import Observable
+from rx.core import Scheduler
 
 from dockerenforcer.config import Config
 from dockerenforcer.docker_helper import DockerHelper
@@ -15,9 +16,9 @@ from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
 
 config = Config()
-fetcher = DockerHelper(config)
+docker_helper = DockerHelper(config)
 judge = Judge(rules)
-jurek = Killer(fetcher, config.mode)
+jurek = Killer(docker_helper, config.mode)
 
 
 def not_on_white_list(container):
@@ -39,13 +40,19 @@ def create_app():
     if not flask_app.debug:
         setup_logging()
 
+    start_events = Observable \
+        .from_iterable(docker_helper.get_start_events_observable()) \
+        .map(lambda e: e['id']) \
+        .map(lambda cid: docker_helper.check_container(cid))
+
     detections = Observable.interval(config.interval_sec * 1000) \
-        .map(lambda _: fetcher.check_containers()) \
+        .map(lambda _: docker_helper.check_containers()) \
         .flat_map(lambda c: c) \
+        .merge(start_events) \
         .map(lambda container: judge.should_be_killed(container)) \
         .where(lambda v: v.verdict) \
         .where(lambda v: not_on_white_list(v.container))
-    subscription = detections.subscribe(jurek)
+    subscription = detections.subscribe_on(Scheduler.new_thread).subscribe(jurek)
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")

@@ -5,8 +5,8 @@ Flask==0.11.1
 itsdangerous==0.24
 Jinja2==2.8
 MarkupSafe==0.23
-requests==2.10.0
-Rx==1.5.2
+requests==2.11.1
+Rx==1.5.3
 six==1.10.0
 websocket-client==0.37.0
 Werkzeug==0.11.11
