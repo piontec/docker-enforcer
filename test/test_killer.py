@@ -31,7 +31,7 @@ class ParamsRulesTests(TestsWithVerdicts):
         self.assertFalse(RulesTestHelper(rules, mem_limit=0).get_verdicts()[0].verdict)
 
     def test_must_have_cpu_quota(self):
-        rules = [{"name": "must have memory limit",
+        rules = [{"name": "must have CPU limit",
                   "rule": lambda c: c.params['HostConfig']['CpuQuota'] > 0 and c.params['HostConfig']['CpuPeriod'] > 0}]
         self.assertTrue(RulesTestHelper(rules, cpu_period=50000, cpu_quota=50000).get_verdicts()[0].verdict)
         self.assertFalse(RulesTestHelper(rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
