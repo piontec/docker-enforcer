@@ -77,7 +77,7 @@ You can see the full list of parameters available (except `position`) in the fil
 ### Running the container
 Put your `rules.py` file into a directory, for example `rules_dir`, and run (minimal command):
 ```bash
-docker run -d --name docker_enforcer -p 8888:8888 --privileged -v /rules_dir:/opt/docker_enforcer/rules -v /var/run:/var/run docker_enforcer:latest
+docker run -d --name docker_enforcer -p 8888:8888 --privileged -v /rules_dir:/opt/docker_enforcer/rules -v /var/run:/var/run tailoredcloud/docker-enforcer
 ```
 After the successful run, a simple web API will be exposed to show current rules and status (see below). You can access `http://localhost:8888/rules` to see the list of rules configured. This should be in sync with the rules file you passed to the container.
 
