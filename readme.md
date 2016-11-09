@@ -1,4 +1,4 @@
-# docker_enforcer
+# docker enforcer
 
 ## What for?
 Docker enforcer audits containers running on a shared docker host. The aim of docker enforcer is to stop containers running on a single host, but not obeying rules configured by the host's administrator. These rules may restrict values used as container's parameters or values reported by container's performance metrics.
@@ -40,7 +40,7 @@ rules = [
 ]    
 ```
 
-1. Must have CPU quota set:
+2. Must have CPU quota set:
 ```python
 rules = [
     {
@@ -50,7 +50,7 @@ rules = [
 ]    
 ```
 
-1. Limit the number of containers running on the host:
+3. Limit the number of containers running on the host:
 ```python
 rules = [
     {
