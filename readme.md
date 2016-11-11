@@ -32,32 +32,34 @@ rules = [
 #### Sample rules - check configuration parameters
 1. All containers must have memory limits set:
 ```python
-rules = [
     {
         "name": "must have memory limit", 
         "rule": lambda c: c.params['HostConfig']['Memory'] > 0
     }
-]    
 ```
 
 2. Must have CPU quota set:
 ```python
-rules = [
     {
         "name": "must have CPU limit",
         "rule": lambda c: c.params['HostConfig']['CpuQuota'] > 0 and c.params['HostConfig']['CpuPeriod'] > 0
     }
-]    
 ```
 
 3. Limit the number of containers running on the host:
 ```python
-rules = [
     {
         rules = [{"name": "no more than 3",
         "rule": lambda c: c.position >= 3}]
     }
-]    
+```
+
+4. Can use host mapped volumes only from `/opt/mnt1` or `/opt/mnt2` on the host:
+```python
+    {
+        "name": "uses valid dirs for volumes",
+        "rule": lambda c: all(lambda b: b.startsWith('/opt/mnt1') or b.startsWith('/opt/mnt2'), c.params['HostConfig']['Binds'])
+    }
 ```
 
 
