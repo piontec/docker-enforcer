@@ -1,4 +1,9 @@
 from docker import Client
+from flask import logging
+from requests import ReadTimeout
+from requests.packages.urllib3.exceptions import ProtocolError
+
+logger = logging.getLogger("docker_enforcer")
 
 
 class Container:
@@ -18,19 +23,40 @@ class DockerHelper:
         super().__init__()
         self.__config = config
         self.__client = Client(base_url=config.docker_socket)
+        self.__params_cache = {}
 
     def check_containers(self):
         res = []
 
-        containers = sorted(self.__client.containers(), key=lambda c: c["Created"])
+        try:
+            containers = sorted(self.__client.containers(), key=lambda c: c["Created"])
+            logger.debug("Fetched containers list from docker daemon")
+        except (ReadTimeout, ProtocolError) as e:
+            logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
+            return res
         ids = [container['Id'] for container in containers]
         counter = 0
         for container_id in ids:
-            params = self.__client.inspect_container(container_id)
-            metrics = self.__client.stats(container=container_id, decode=True, stream=False)
+            try:
+                params = self.get_params(container_id)
+                logger.debug(("Fetched parameters for container {0}".format(container_id)))
+                metrics = self.__client.stats(container=container_id, decode=True, stream=False)
+                logger.debug(("Fetched metrics for container {0}".format(container_id)))
+            except (ReadTimeout, ProtocolError) as e:
+                logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
+                continue
             counter += 1
             res.append(Container(container_id, params, metrics, counter))
         return res
+
+    def get_params(self, container_id):
+        if not self.__config.cache_params:
+            return self.__client.inspect_container(container_id)
+        if container_id in self.__params_cache:
+            return self.__params_cache[container_id]
+        params = self.__client.inspect_container(container_id)
+        self.__params_cache[container_id] = params
+        return params
 
     def get_start_events_observable(self):
         return self.__client.events(filters={"event": "start"}, decode=True)
