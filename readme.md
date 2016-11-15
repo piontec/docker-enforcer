@@ -37,7 +37,6 @@ rules = [
         "rule": lambda c: c.params['HostConfig']['Memory'] > 0
     }
 ```
-
 2. Must have CPU quota set:
 ```python
     {
@@ -45,7 +44,6 @@ rules = [
         "rule": lambda c: c.params['HostConfig']['CpuQuota'] > 0 and c.params['HostConfig']['CpuPeriod'] > 0
     }
 ```
-
 3. Limit the number of containers running on the host:
 ```python
     {
@@ -53,7 +51,6 @@ rules = [
         "rule": lambda c: c.position >= 3}]
     }
 ```
-
 4. Can use host mapped volumes only from `/opt/mnt1` or `/opt/mnt2` on the host:
 ```python
     {
@@ -84,10 +81,11 @@ docker run -d --name docker_enforcer -p 8888:8888 --privileged -v /rules_dir:/op
 After the successful run, a simple web API will be exposed to show current rules and status (see below). You can access `http://localhost:8888/rules` to see the list of rules configured. This should be in sync with the rules file you passed to the container.
 
 Additionally, you configure the behavior by passing the following environment variables (using `-e KEY=VAL`) to the command above (values below are the defaults):
-- "CHECK_INTERVAL_S=60" - how often the periodic check of containers against the rules is run 
+- "CHECK_INTERVAL_S=600" - how often the periodic check of containers against the rules is run 
 - "DOCKER_SOCKET=unix:///var/run/docker.sock" -  path to the docker Unix socket, default should be OK in most cases
-- "WHITE_LIST=docker-enforcer docker_enforcer" - space separated whitelist of container names; containers on the won't be stopped even if they break the rules
-- "MODE=WARN" - by default docker enforcer runs in a 'WARN' mode, where violations of rules are logged, but the containers are never actually stopped; to enable containers stopping, set this to 'KILL' 
+- "WHITE_LIST=docker-enforcer docker_enforcer" - space separated white list of container names; containers on the won't be stopped even if they break the rules
+- "MODE=WARN" - by default docker enforcer runs in a 'WARN' mode, where violations of rules are logged, but the containers are never actually stopped; to enable containers stopping, set this to 'KILL'
+- "CACHE_PARAMS=True" - by default docker-enforcer is caching indefinitely "params" section of container data in order to decrease the number of calls to docker daemon. Set this to "False" to always query the daemon.  
  
 ### Accessing data about running docker enforcer container
 Docker enforcer exposes a simple HTTP API on the port 8888. This currently includes the following endpoints:
