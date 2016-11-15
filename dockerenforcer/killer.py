@@ -56,8 +56,8 @@ containers_stopped_total {0}
                     str_list += ",\n"
                 else:
                     is_first = False
-                str_list += "{{ \"id\": \"{0}\", \"count\": {1}, \"last_timestamp\": \"{2}\" }}"\
-                    .format(k, v.counter, v.last_timestamp.isoformat())
+                str_list += "{{ \"id\": \"{0}\", \"name\": \"{1}\", \"count\": {2}, \"last_timestamp\": \"{3}\" }}"\
+                    .format(k, v.name, v.counter, v.last_timestamp.isoformat())
             return "[{0}]".format(str_list)
 
 
