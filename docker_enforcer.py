@@ -15,6 +15,7 @@ from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
 
+version = "0.2"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
@@ -40,13 +41,16 @@ def create_app():
     if not flask_app.debug:
         setup_logging()
 
+    flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(version, config.docker_socket))
     start_events = Observable \
         .from_iterable(docker_helper.get_start_events_observable()) \
         .map(lambda e: e['id']) \
         .map(lambda cid: docker_helper.check_container(cid))
 
     detections = Observable.interval(config.interval_sec * 1000) \
+        .start_with(-1) \
         .map(lambda _: docker_helper.check_containers()) \
+        .retry() \
         .flat_map(lambda c: c) \
         .merge(start_events) \
         .map(lambda container: judge.should_be_killed(container)) \

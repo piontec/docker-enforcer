@@ -1,4 +1,5 @@
 from docker import Client
+from docker.errors import NotFound
 from flask import logging
 from requests import ReadTimeout
 from requests.packages.urllib3.exceptions import ProtocolError
@@ -25,6 +26,19 @@ class DockerHelper:
         self.__client = Client(base_url=config.docker_socket)
         self.__params_cache = {}
 
+    def check_container(self, container_id):
+        try:
+            params = self.__client.inspect_container(container_id)
+            metrics = self.__client.stats(container=container_id, decode=True, stream=False)
+            logger.debug("Fetched data for container {0}".format(container_id))
+        except NotFound as e:
+            logger.warn("Container {0} not found.".format(e))
+            return None
+        except (ReadTimeout, ProtocolError) as e:
+            logger.error("Error while trying to get list of containers from docker: {0}".format(e))
+            return None
+        return Container(container_id, params, metrics, 0)
+
     def check_containers(self):
         res = []
 
@@ -37,16 +51,11 @@ class DockerHelper:
         ids = [container['Id'] for container in containers]
         counter = 0
         for container_id in ids:
-            try:
-                params = self.get_params(container_id)
-                logger.debug(("Fetched parameters for container {0}".format(container_id)))
-                metrics = self.__client.stats(container=container_id, decode=True, stream=False)
-                logger.debug(("Fetched metrics for container {0}".format(container_id)))
-            except (ReadTimeout, ProtocolError) as e:
-                logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
+            container = self.check_container(container_id)
+            if container is None:
                 continue
             counter += 1
-            res.append(Container(container_id, params, metrics, counter))
+            res.append(container)
         return res
 
     def get_params(self, container_id):
@@ -60,11 +69,6 @@ class DockerHelper:
 
     def get_start_events_observable(self):
         return self.__client.events(filters={"event": "start"}, decode=True)
-
-    def check_container(self, container_id):
-        params = self.__client.inspect_container(container_id)
-        metrics = self.__client.stats(container=container_id, decode=True, stream=False)
-        return Container(container_id, params, metrics, 0)
 
     def kill_container(self, container):
         self.__client.stop(container.params['Id'])
