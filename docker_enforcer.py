@@ -30,11 +30,11 @@ def not_on_white_list(container):
 def create_app():
     def setup_logging():
         handler = StreamHandler(stream=sys.stdout)
-        handler.setLevel(logging.DEBUG)
+        handler.setLevel(config.log_level)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         flask_app.logger.addHandler(handler)
-        flask_app.logger.setLevel(logging.DEBUG)
+        flask_app.logger.setLevel(config.log_level)
         flask_app.logger.name = "docker_enforcer"
 
     flask_app = Flask(__name__)
