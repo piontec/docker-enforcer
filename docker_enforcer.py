@@ -15,7 +15,7 @@ from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
 
-version = "0.2"
+version = "0.3.0"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
@@ -50,13 +50,14 @@ def create_app():
     detections = Observable.interval(config.interval_sec * 1000) \
         .start_with(-1) \
         .map(lambda _: docker_helper.check_containers()) \
-        .retry() \
         .flat_map(lambda c: c) \
         .merge(start_events) \
         .map(lambda container: judge.should_be_killed(container)) \
         .where(lambda v: v.verdict) \
         .where(lambda v: not_on_white_list(v.container))
-    subscription = detections.subscribe_on(Scheduler.new_thread).subscribe(jurek)
+    subscription = detections \
+        .subscribe_on(Scheduler.new_thread) \
+        .subscribe(jurek)
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")

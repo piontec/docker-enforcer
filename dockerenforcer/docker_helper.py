@@ -1,3 +1,4 @@
+import threading
 from json import JSONDecodeError
 
 from docker import Client
@@ -24,6 +25,8 @@ class Container:
 class DockerHelper:
     def __init__(self, config):
         super().__init__()
+        self.__padlock = threading.Lock()
+        self.__check_in_progress = False
         self.__config = config
         self.__client = Client(base_url=config.docker_socket)
         self.__params_cache = {}
@@ -45,14 +48,24 @@ class DockerHelper:
         return Container(container_id, params, metrics, 0)
 
     def check_containers(self):
+        logger.debug("Connecting to get the list of containers")
+        with self.__padlock:
+            if self.__check_in_progress:
+                logger.warn("Previous check did not yet complete, consider increasing CHECK_INTERVAL_S")
+                return
+            self.__check_in_progress = True
         try:
             containers = sorted(self.__client.containers(), key=lambda c: c["Created"])
             logger.debug("Fetched containers list from docker daemon")
         except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
+            with self.__padlock:
+                self.__check_in_progress = False
             return
         except Exception as e:
             logger.error("Unexpected error while trying to get list of containers from docker: {0}".format(e))
+            with self.__padlock:
+                self.__check_in_progress = False
             return
         ids = [container['Id'] for container in containers]
         counter = 0
@@ -62,6 +75,8 @@ class DockerHelper:
                 continue
             counter += 1
             yield container
+        with self.__padlock:
+            self.__check_in_progress = False
 
     def get_params(self, container_id):
         if not self.__config.cache_params:

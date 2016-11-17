@@ -11,11 +11,17 @@ logger = logging.getLogger("docker_enforcer")
 
 
 class Stat:
-    def __init__(self, name):
+    def __init__(self, name, reason):
         super().__init__()
         self.counter = 1
         self.last_timestamp = datetime.datetime.utcnow()
         self.name = name
+        self.reason = reason
+
+    def record_new(self, reason):
+        self.counter += 1
+        self.last_timestamp = datetime.datetime.utcnow()
+        self.reason = reason
 
     def __str__(self, *args, **kwargs):
         return "{0} - {1}".format(self.counter, self.last_timestamp)
@@ -27,13 +33,12 @@ class StatusDictionary:
         self.__padlock = threading.Lock()
         self.__killed_containers = killed_containers if killed_containers else {}
 
-    def register_killed(self, container):
+    def register_killed(self, container, reason):
         with self.__padlock:
             if container.cid in self.__killed_containers.keys():
-                self.__killed_containers[container.cid].counter += 1
-                self.__killed_containers[container.cid].last_timestamp = datetime.datetime.utcnow()
+                self.__killed_containers[container.cid].record_new(reason)
             else:
-                self.__killed_containers[container.cid] = Stat(container.params['Name'])
+                self.__killed_containers[container.cid] = Stat(container.params['Name'], reason)
 
     def copy(self):
         with self.__padlock:
@@ -57,8 +62,9 @@ containers_stopped_total {0}
                     str_list += ",\n"
                 else:
                     is_first = False
-                str_list += "{{ \"id\": \"{0}\", \"name\": \"{1}\", \"count\": {2}, \"last_timestamp\": \"{3}\" }}"\
-                    .format(k, v.name, v.counter, v.last_timestamp.isoformat())
+                str_list += "{{ \"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": \"{2}\", " \
+                            "\"count\": {3}, \"last_timestamp\": \"{4}\" }}"\
+                    .format(k, v.name, v.reason, v.counter, v.last_timestamp.isoformat())
             return "[{0}]".format(str_list)
 
 
@@ -96,7 +102,7 @@ class Killer(Observer):
         logger.info("Container {0} is detected to violate the rule \"{1}\". {2} the container [{3} mode]"
                     .format(verdict.container, verdict.reason,
                             "Not stopping" if self.__mode == Mode.Warn else "Stopping", self.__mode))
-        self.__status.register_killed(verdict.container)
+        self.__status.register_killed(verdict.container, verdict.reason)
         if self.__mode == Mode.Kill:
             self.__manager.kill_container(verdict.container)
 
