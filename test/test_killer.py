@@ -12,11 +12,11 @@ class TestsWithVerdicts(unittest.TestCase):
 
 
 class ParamsRulesTests(TestsWithVerdicts):
-    def test_count_rule(self):
+    def test_not_violates_count_rule(self):
         rules = [{"name": "no more than 10", "rule": lambda c: c.position > 10}]
         self.assertFalse(RulesTestHelper(rules).get_verdicts()[0].verdict)
 
-    def test_no_containers(self):
+    def test_violates_no_containers(self):
         rules = [{"name": "no containers", "rule": lambda c: True}]
         self.assertTrue(RulesTestHelper(rules).get_verdicts()[0].verdict)
 
@@ -26,15 +26,16 @@ class ParamsRulesTests(TestsWithVerdicts):
         self.assert_verdicts([(3, False), (2, True)], verdicts)
 
     def test_must_have_memory_limit(self):
-        rules = [{"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] > 0}]
-        self.assertTrue(RulesTestHelper(rules, mem_limit=1024).get_verdicts()[0].verdict)
-        self.assertFalse(RulesTestHelper(rules, mem_limit=0).get_verdicts()[0].verdict)
+        rules = [{"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] == 0}]
+        self.assertFalse(RulesTestHelper(rules, mem_limit=1024).get_verdicts()[0].verdict)
+        self.assertTrue(RulesTestHelper(rules, mem_limit=0).get_verdicts()[0].verdict)
 
     def test_must_have_cpu_quota(self):
         rules = [{"name": "must have CPU limit",
-                  "rule": lambda c: c.params['HostConfig']['CpuQuota'] > 0 and c.params['HostConfig']['CpuPeriod'] > 0}]
-        self.assertTrue(RulesTestHelper(rules, cpu_period=50000, cpu_quota=50000).get_verdicts()[0].verdict)
-        self.assertFalse(RulesTestHelper(rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
+                  "rule": lambda c: c.params['HostConfig']['CpuQuota'] == 0
+                          and c.params['HostConfig']['CpuPeriod'] == 0}]
+        self.assertFalse(RulesTestHelper(rules, cpu_period=50000, cpu_quota=50000).get_verdicts()[0].verdict)
+        self.assertTrue(RulesTestHelper(rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
 
 
 class MetricsRulesTests(TestsWithVerdicts):

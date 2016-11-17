@@ -1,5 +1,6 @@
 from enum import Enum
 import os
+import logging
 
 
 class Mode(Enum):
@@ -16,3 +17,4 @@ class Config:
         self.white_list = os.getenv('WHITE_LIST', 'docker-enforcer docker_enforcer').split()
         self.mode = Mode[os.getenv('MODE', 'WARN').lower().capitalize()]
         self.cache_params = bool(os.getenv('CACHE_PARAMS', 'True'))
+        self.log_level = os.getenv('LOG_LEVEL', 'INFO')

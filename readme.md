@@ -11,9 +11,8 @@ It's the easiest to run docker enforcer as a container. Before starting, pay att
 - You can always exclude some containers from being killed due to rules evaluation by including their name in the white list.
  
 ### Preparing rules file
-The rules file must include a python list of dictionaries, where each of the dictionaries is a single rule. The rule includes its name and a lambda function, which contains evaluation logic. 
-
-Each of the rules is applied to data about each container. If any of the rules returns `True`, the container will be stopped (unless it's on the whitelist). Container's data includes the following properties:
+Docker-enforcer works by checking a set of rules against the containers that are running on the docker host. Each of the rules is applied to data about each container. Rules indicate which container should be killed, so if any of the rules returns `True`, the container will be stopped (unless it's on the white list). 
+The rules file must include a python list of dictionaries, where each of the dictionaries is a single rule. The rule includes its name and a lambda function, which contains evaluation logic. Container's data that can be checked by a rule includes the following properties:
 - `position` - the sequence number of the container on the list of all containers, sorted by the start date,
 - `params` - a dictionary of parameters used to start this container (for example with `docker run`),
 - `metrics` - a dictionary of performance metrics reported by the docker daemon for the container.
@@ -34,14 +33,14 @@ rules = [
 ```python
     {
         "name": "must have memory limit", 
-        "rule": lambda c: c.params['HostConfig']['Memory'] > 0
+        "rule": lambda c: c.params['HostConfig']['Memory'] == 0
     }
 ```
 2. Must have CPU quota set:
 ```python
     {
         "name": "must have CPU limit",
-        "rule": lambda c: c.params['HostConfig']['CpuQuota'] > 0 and c.params['HostConfig']['CpuPeriod'] > 0
+        "rule": lambda c: c.params['HostConfig']['CpuQuota'] == 0
     }
 ```
 3. Limit the number of containers running on the host:
@@ -55,7 +54,7 @@ rules = [
 ```python
     {
         "name": "uses valid dirs for volumes",
-        "rule": lambda c: all(lambda b: b.startsWith('/opt/mnt1') or b.startsWith('/opt/mnt2'), c.params['HostConfig']['Binds'])
+        "rule": lambda c: not all(lambda b: b.startsWith('/opt/mnt1') or b.startsWith('/opt/mnt2'), c.params['HostConfig']['Binds'])
     }
 ```
 
@@ -82,10 +81,11 @@ After the successful run, a simple web API will be exposed to show current rules
 
 Additionally, you configure the behavior by passing the following environment variables (using `-e KEY=VAL`) to the command above (values below are the defaults):
 - "CHECK_INTERVAL_S=600" - how often the periodic check of containers against the rules is run 
-- "DOCKER_SOCKET=unix:///var/run/docker.sock" -  path to the docker Unix socket, default should be OK in most cases
+- "DOCKER_SOCKET=unix:///var/run/docker.sock" -  path to the docker Unix socket, default should be OK in most cases; you can run against a remote host by passing a value like `10.20.30.40:2375`
 - "WHITE_LIST=docker-enforcer docker_enforcer" - space separated white list of container names; containers on the won't be stopped even if they break the rules
 - "MODE=WARN" - by default docker enforcer runs in a 'WARN' mode, where violations of rules are logged, but the containers are never actually stopped; to enable containers stopping, set this to 'KILL'
-- "CACHE_PARAMS=True" - by default docker-enforcer is caching indefinitely "params" section of container data in order to decrease the number of calls to docker daemon. Set this to "False" to always query the daemon.  
+- "CACHE_PARAMS=True" - by default docker-enforcer is caching indefinitely "params" section of container data in order to decrease the number of calls to docker daemon. Set this to "False" to always query the daemon.
+- "LOG_LEVEL=INFO" - set python logging level for the software
  
 ### Accessing data about running docker enforcer container
 Docker enforcer exposes a simple HTTP API on the port 8888. This currently includes the following endpoints:

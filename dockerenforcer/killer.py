@@ -11,10 +11,11 @@ logger = logging.getLogger("docker_enforcer")
 
 
 class Stat:
-    def __init__(self):
+    def __init__(self, name):
         super().__init__()
         self.counter = 1
         self.last_timestamp = datetime.datetime.utcnow()
+        self.name = name
 
     def __str__(self, *args, **kwargs):
         return "{0} - {1}".format(self.counter, self.last_timestamp)
@@ -32,7 +33,7 @@ class StatusDictionary:
                 self.__killed_containers[container.cid].counter += 1
                 self.__killed_containers[container.cid].last_timestamp = datetime.datetime.utcnow()
             else:
-                self.__killed_containers[container.cid] = Stat()
+                self.__killed_containers[container.cid] = Stat(container.params['Name'])
 
     def copy(self):
         with self.__padlock:

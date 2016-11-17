@@ -1,3 +1,5 @@
+from json import JSONDecodeError
+
 from docker import Client
 from docker.errors import NotFound
 from flask import logging
@@ -32,22 +34,26 @@ class DockerHelper:
             metrics = self.__client.stats(container=container_id, decode=True, stream=False)
             logger.debug("Fetched data for container {0}".format(container_id))
         except NotFound as e:
-            logger.warn("Container {0} not found.".format(e))
+            logger.warn("Container {0} not found - error {1}.".format(container_id, e))
             return None
-        except (ReadTimeout, ProtocolError) as e:
-            logger.error("Error while trying to get list of containers from docker: {0}".format(e))
+        except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
+            logger.error("Communication error when fetching info about container {0}: {1}".format(container_id, e))
+            return None
+        except Exception as e:
+            logger.error("Unexpected error when fetching info about container {0}: {1}".format(container_id, e))
             return None
         return Container(container_id, params, metrics, 0)
 
     def check_containers(self):
-        res = []
-
         try:
             containers = sorted(self.__client.containers(), key=lambda c: c["Created"])
             logger.debug("Fetched containers list from docker daemon")
-        except (ReadTimeout, ProtocolError) as e:
+        except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
-            return res
+            return
+        except Exception as e:
+            logger.error("Unexpected error while trying to get list of containers from docker: {0}".format(e))
+            return
         ids = [container['Id'] for container in containers]
         counter = 0
         for container_id in ids:
@@ -55,8 +61,7 @@ class DockerHelper:
             if container is None:
                 continue
             counter += 1
-            res.append(container)
-        return res
+            yield container
 
     def get_params(self, container_id):
         if not self.__config.cache_params:
