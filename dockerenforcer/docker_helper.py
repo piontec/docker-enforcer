@@ -33,8 +33,16 @@ class DockerHelper:
 
     def check_container(self, container_id):
         try:
-            params = self.__client.inspect_container(container_id)
-            metrics = self.__client.stats(container=container_id, decode=True, stream=False)
+            if not self.__config.disable_params:
+                params = self.get_params(container_id)
+            else:
+                params = {}
+            if not self.__config.disable_metrics:
+                logger.debug("Starting to fetch metrics for {0}".format(container_id))
+                metrics = self.__client.stats(container=container_id, decode=True, stream=False)
+                logger.debug("Metrics fetched for {0}".format(container_id))
+            else:
+                metrics = {}
             logger.debug("Fetched data for container {0}".format(container_id))
         except NotFound as e:
             logger.warn("Container {0} not found - error {1}.".format(container_id, e))
@@ -77,13 +85,20 @@ class DockerHelper:
             yield container
         with self.__padlock:
             self.__check_in_progress = False
+        logger.debug("Periodic check done")
 
     def get_params(self, container_id):
-        if not self.__config.cache_params:
-            return self.__client.inspect_container(container_id)
-        if container_id in self.__params_cache:
+        if self.__config.cache_params and container_id in self.__params_cache:
+            logger.debug("Returning cached params for container {0}".format(container_id))
             return self.__params_cache[container_id]
+
+        logger.debug("Starting to fetch params for {0}".format(container_id))
         params = self.__client.inspect_container(container_id)
+        logger.debug("Params fetched for {0}".format(container_id))
+        if not self.__config.cache_params:
+            return params
+
+        logger.debug("Storing params of {0} in cache".format(container_id))
         self.__params_cache[container_id] = params
         return params
 

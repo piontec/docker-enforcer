@@ -82,12 +82,16 @@ class Judge:
         self.__rules = rules
 
     def should_be_killed(self, container):
-        if not (container and container.params and container.metrics):
+        if not container:
+            logger.warn("No container details, skipping checks")
             return Verdict(False, container, None)
 
         for rule in self.__rules:
-            if rule['rule'](container):
-                return Verdict(True, container, rule['name'])
+            try:
+                if rule['rule'](container):
+                    return Verdict(True, container, rule['name'])
+            except Exception as e:
+                logger.error("During execution of rule {0} exception was raised: {1}".format(rule['name'], e))
         return Verdict(False, container, None)
 
 

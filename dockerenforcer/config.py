@@ -18,3 +18,5 @@ class Config:
         self.mode = Mode[os.getenv('MODE', 'WARN').lower().capitalize()]
         self.cache_params = bool(os.getenv('CACHE_PARAMS', 'True'))
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
+        self.disable_params = bool(os.getenv('DISABLE_PARAMS', 'False'))
+        self.disable_metrics = bool(os.getenv('DISABLE_METRICS', 'False'))

@@ -42,8 +42,7 @@ def create_app():
         setup_logging()
 
     flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(version, config.docker_socket))
-    start_events = Observable \
-        .from_iterable(docker_helper.get_start_events_observable()) \
+    start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
         .map(lambda e: e['id']) \
         .map(lambda cid: docker_helper.check_container(cid))
 
@@ -56,6 +55,7 @@ def create_app():
         .where(lambda v: v.verdict) \
         .where(lambda v: not_on_white_list(v.container))
     subscription = detections \
+        .retry() \
         .subscribe_on(Scheduler.new_thread) \
         .subscribe(jurek)
 
