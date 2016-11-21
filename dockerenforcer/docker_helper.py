@@ -105,7 +105,8 @@ class DockerHelper:
         return params
 
     def purge_cache(self, running_container_ids):
-        for cid in running_container_ids:
+        diff = [c for c in self.__params_cache.keys() if c not in running_container_ids]
+        for cid in diff:
             self.__params_cache.pop(cid, None)
 
     def get_start_events_observable(self):

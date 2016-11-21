@@ -20,3 +20,5 @@ class Config:
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
         self.disable_params = bool(os.getenv('DISABLE_PARAMS', 'False') == 'True')
         self.disable_metrics = bool(os.getenv('DISABLE_METRICS', 'False') == 'True')
+        self.run_start_events = bool(os.getenv('RUN_START_EVENTS', 'False') == 'True')
+        self.run_periodic = bool(os.getenv('RUN_PERIODIC', 'True') == 'True')

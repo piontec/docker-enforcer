@@ -8,6 +8,7 @@ from logging import StreamHandler
 from flask import Flask
 from flask import Response
 from rx import Observable
+from rx.concurrency import NewThreadScheduler
 from rx.core import Scheduler
 
 from dockerenforcer.config import Config
@@ -42,21 +43,35 @@ def create_app():
         setup_logging()
 
     flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(version, config.docker_socket))
-    start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
-        .map(lambda e: e['id']) \
-        .map(lambda cid: docker_helper.check_container(cid))
+    if not (config.run_start_events or config.run_periodic):
+        raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
-    detections = Observable.interval(config.interval_sec * 1000) \
-        .start_with(-1) \
-        .map(lambda _: docker_helper.check_containers()) \
-        .flat_map(lambda c: c) \
-        .merge(start_events) \
+    if config.run_start_events:
+        start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
+            .observe_on(scheduler=NewThreadScheduler()) \
+            .map(lambda e: e['id']) \
+            .map(lambda cid: docker_helper.check_container(cid))
+
+    if config.run_periodic:
+        periodic = Observable.interval(config.interval_sec * 1000) \
+            .start_with(-1) \
+            .map(lambda _: docker_helper.check_containers()) \
+            .flat_map(lambda c: c)
+
+    if config.run_start_events and not config.run_periodic:
+        detections = start_events
+    elif not config.run_start_events and config.run_periodic:
+        detections = periodic
+    else:
+        detections = start_events.merge(periodic)
+
+    verdicts = detections \
         .map(lambda container: judge.should_be_killed(container)) \
         .where(lambda v: v.verdict) \
         .where(lambda v: not_on_white_list(v.container))
-    subscription = detections \
+    subscription = verdicts \
         .retry() \
-        .subscribe_on(Scheduler.new_thread) \
+        .subscribe_on(NewThreadScheduler()) \
         .subscribe(jurek)
 
     def on_exit(sig, frame):
