@@ -15,7 +15,7 @@ from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
 
-version = "0.3.2"
+version = "0.3.3"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
