@@ -83,6 +83,8 @@ class DockerHelper:
                 continue
             counter += 1
             yield container
+        if self.__config.cache_params:
+            self.purge_cache(ids)
         with self.__padlock:
             self.__check_in_progress = False
         logger.debug("Periodic check done")
@@ -101,6 +103,10 @@ class DockerHelper:
         logger.debug("Storing params of {0} in cache".format(container_id))
         self.__params_cache[container_id] = params
         return params
+
+    def purge_cache(self, running_container_ids):
+        for cid in running_container_ids:
+            self.__params_cache.pop(cid, None)
 
     def get_start_events_observable(self):
         return self.__client.events(filters={"event": "start"}, decode=True)
