@@ -54,7 +54,7 @@ rules = [
 ```python
     {
         "name": "uses valid dirs for volumes",
-        "rule": lambda c: not all(lambda b: b.startsWith('/opt/mnt1') or b.startsWith('/opt/mnt2'), c.params['HostConfig']['Binds'])
+        "rule": lambda c: not all([b.startswith("/opt/mnt1") or b.startswith("/opt/mnt2") for b in c.params['HostConfig']['Binds']])
     }
 ```
 

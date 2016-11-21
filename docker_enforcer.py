@@ -9,7 +9,6 @@ from flask import Flask
 from flask import Response
 from rx import Observable
 from rx.concurrency import NewThreadScheduler
-from rx.core import Scheduler
 
 from dockerenforcer.config import Config
 from dockerenforcer.docker_helper import DockerHelper
@@ -21,11 +20,6 @@ config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
 jurek = Killer(docker_helper, config.mode)
-
-
-def not_on_white_list(container):
-    return container.params and container.params['Name'] \
-           and container.params['Name'] not in config.white_list
 
 
 def create_app():
@@ -66,9 +60,10 @@ def create_app():
         detections = start_events.merge(periodic)
 
     verdicts = detections \
+        .where(lambda c: not_on_white_list(c)) \
         .map(lambda container: judge.should_be_killed(container)) \
-        .where(lambda v: v.verdict) \
-        .where(lambda v: not_on_white_list(v.container))
+        .where(lambda v: v.verdict)
+
     subscription = verdicts \
         .retry() \
         .subscribe_on(NewThreadScheduler()) \
@@ -87,6 +82,14 @@ def create_app():
 
 
 app = create_app()
+
+
+def not_on_white_list(container):
+    not_on_list = container.params and container.params['Name'] \
+           and container.params['Name'][1:] not in config.white_list
+    if not not_on_list:
+        app.logger.debug("Container {0} is on white list".format(container.params['Name'][1:]))
+    return not_on_list
 
 
 @app.route('/rules')
