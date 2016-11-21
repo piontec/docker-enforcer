@@ -54,7 +54,7 @@ rules = [
 ```python
     {
         "name": "uses valid dirs for volumes",
-        "rule": lambda c: not all(lambda b: b.startsWith('/opt/mnt1') or b.startsWith('/opt/mnt2'), c.params['HostConfig']['Binds'])
+        "rule": lambda c: False if c.params['HostConfig']['Binds'] is None else not all([b.startswith("/opt/mnt1") or b.startswith("/opt/mnt2") for b in c.params['HostConfig']['Binds']])
     }
 ```
 
@@ -86,6 +86,8 @@ Additionally, you configure the behavior by passing the following environment va
 - "MODE=WARN" - by default docker enforcer runs in a 'WARN' mode, where violations of rules are logged, but the containers are never actually stopped; to enable containers stopping, set this to 'KILL'
 - "CACHE_PARAMS=True" - by default docker-enforcer is caching indefinitely "params" section of container data in order to decrease the number of calls to docker daemon. Set this to "False" to always query the daemon.
 - "LOG_LEVEL=INFO" - set python logging level for the software
+- "DISABLE_PARAMS=False" - disable container's parameters fetching; this decreases the number of requests made to the docker daemon, but you can't use any rules that refer to `c.params` property
+- "DISABLE_METRICS=False" - disable container's metrics fetching; this decreases the number of requests made to the docker daemon (metrics fetching is quite heavy), but you can't use any rules that refer to `c.metrics` property
  
 ### Accessing data about running docker enforcer container
 Docker enforcer exposes a simple HTTP API on the port 8888. This currently includes the following endpoints:

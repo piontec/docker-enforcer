@@ -8,23 +8,18 @@ from logging import StreamHandler
 from flask import Flask
 from flask import Response
 from rx import Observable
-from rx.core import Scheduler
+from rx.concurrency import NewThreadScheduler
 
 from dockerenforcer.config import Config
 from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
 
-version = "0.2"
+version = "0.3.3"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
 jurek = Killer(docker_helper, config.mode)
-
-
-def not_on_white_list(container):
-    return container.params and container.params['Name'] \
-           and container.params['Name'] not in config.white_list
 
 
 def create_app():
@@ -42,21 +37,37 @@ def create_app():
         setup_logging()
 
     flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(version, config.docker_socket))
-    start_events = Observable \
-        .from_iterable(docker_helper.get_start_events_observable()) \
-        .map(lambda e: e['id']) \
-        .map(lambda cid: docker_helper.check_container(cid))
+    if not (config.run_start_events or config.run_periodic):
+        raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
-    detections = Observable.interval(config.interval_sec * 1000) \
-        .start_with(-1) \
-        .map(lambda _: docker_helper.check_containers()) \
-        .retry() \
-        .flat_map(lambda c: c) \
-        .merge(start_events) \
+    if config.run_start_events:
+        start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
+            .observe_on(scheduler=NewThreadScheduler()) \
+            .map(lambda e: e['id']) \
+            .map(lambda cid: docker_helper.check_container(cid))
+
+    if config.run_periodic:
+        periodic = Observable.interval(config.interval_sec * 1000) \
+            .start_with(-1) \
+            .map(lambda _: docker_helper.check_containers()) \
+            .flat_map(lambda c: c)
+
+    if config.run_start_events and not config.run_periodic:
+        detections = start_events
+    elif not config.run_start_events and config.run_periodic:
+        detections = periodic
+    else:
+        detections = start_events.merge(periodic)
+
+    verdicts = detections \
+        .where(lambda c: not_on_white_list(c)) \
         .map(lambda container: judge.should_be_killed(container)) \
-        .where(lambda v: v.verdict) \
-        .where(lambda v: not_on_white_list(v.container))
-    subscription = detections.subscribe_on(Scheduler.new_thread).subscribe(jurek)
+        .where(lambda v: v.verdict)
+
+    subscription = verdicts \
+        .retry() \
+        .subscribe_on(NewThreadScheduler()) \
+        .subscribe(jurek)
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
@@ -71,6 +82,14 @@ def create_app():
 
 
 app = create_app()
+
+
+def not_on_white_list(container):
+    not_on_list = container.params and container.params['Name'] \
+           and container.params['Name'][1:] not in config.white_list
+    if not not_on_list:
+        app.logger.debug("Container {0} is on white list".format(container.params['Name'][1:]))
+    return not_on_list
 
 
 @app.route('/rules')

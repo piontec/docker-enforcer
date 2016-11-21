@@ -16,5 +16,9 @@ class Config:
         self.docker_socket = os.getenv('DOCKER_SOCKET', 'unix:///var/run/docker.sock')
         self.white_list = os.getenv('WHITE_LIST', 'docker-enforcer docker_enforcer').split()
         self.mode = Mode[os.getenv('MODE', 'WARN').lower().capitalize()]
-        self.cache_params = bool(os.getenv('CACHE_PARAMS', 'True'))
+        self.cache_params = bool(os.getenv('CACHE_PARAMS', 'True') == 'True')
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
+        self.disable_params = bool(os.getenv('DISABLE_PARAMS', 'False') == 'True')
+        self.disable_metrics = bool(os.getenv('DISABLE_METRICS', 'False') == 'True')
+        self.run_start_events = bool(os.getenv('RUN_START_EVENTS', 'False') == 'True')
+        self.run_periodic = bool(os.getenv('RUN_PERIODIC', 'True') == 'True')
