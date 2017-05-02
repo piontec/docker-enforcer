@@ -5,8 +5,7 @@ import signal
 import sys
 from logging import StreamHandler
 
-from flask import Flask
-from flask import Response
+from flask import Flask, Response, request
 from rx import Observable
 from rx.concurrency import NewThreadScheduler
 
@@ -14,6 +13,11 @@ from dockerenforcer.config import Config
 from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
+
+from pygments import highlight
+from pygments.lexers.data import JsonLexer
+from pygments.lexers.python import Python3Lexer
+from pygments.formatters.html import HtmlFormatter
 
 version = "0.3.3"
 config = Config()
@@ -97,6 +101,11 @@ def show_rules():
     rules_txt = [{"name": d["name"], "rule": inspect.getsource(d["rule"]).strip().split(':', 1)[1].strip()} for d in
                  rules]
     data = json.dumps(rules_txt)
+    if request.accept_mimetypes.accept_html:
+        with open("rules/rules.py", "r") as file:
+            data = file.read()
+            html = highlight(data, Python3Lexer(), HtmlFormatter(full=True, linenos='table'))
+            return Response(html, content_type="text/html")
     return Response(data, content_type="application/json")
 
 
@@ -109,4 +118,7 @@ def show_metrics():
 @app.route('/')
 def show_stats():
     data = jurek.get_stats().to_json_detail_stats()
+    if request.accept_mimetypes.accept_html:
+        html = highlight(data, JsonLexer(), HtmlFormatter(full=True, linenos='table'))
+        return Response(html, content_type="text/html")
     return Response(data, content_type="application/json")
