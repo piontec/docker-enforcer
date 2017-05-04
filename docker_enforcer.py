@@ -9,7 +9,7 @@ from flask import Flask, Response, request
 from rx import Observable
 from rx.concurrency import NewThreadScheduler
 
-from dockerenforcer.config import Config
+from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
@@ -98,14 +98,14 @@ def not_on_white_list(container):
 
 @app.route('/rules')
 def show_rules():
-    rules_txt = [{"name": d["name"], "rule": inspect.getsource(d["rule"]).strip().split(':', 1)[1].strip()} for d in
-                 rules]
-    data = json.dumps(rules_txt)
     if request.accept_mimetypes.accept_html:
         with open("rules/rules.py", "r") as file:
             data = file.read()
             html = highlight(data, Python3Lexer(), HtmlFormatter(full=True, linenos='table'))
             return Response(html, content_type="text/html")
+    rules_txt = [{"name": d["name"], "rule": inspect.getsource(d["rule"]).strip().split(':', 1)[1].strip()} for d in
+                 rules]
+    data = json.dumps(rules_txt, sort_keys=True, indent=4, separators=(',', ': '))
     return Response(data, content_type="application/json")
 
 
@@ -118,6 +118,16 @@ def show_metrics():
 @app.route('/')
 def show_stats():
     data = jurek.get_stats().to_json_detail_stats()
+    return to_formatted_json(data)
+
+
+@app.route('/config')
+def show_config():
+    data = json.dumps(config, cls=ConfigEncoder, sort_keys=True, indent=4, separators=(',', ': '))
+    return to_formatted_json(data)
+
+
+def to_formatted_json(data):
     if request.accept_mimetypes.accept_html:
         html = highlight(data, JsonLexer(), HtmlFormatter(full=True, linenos='table'))
         return Response(html, content_type="text/html")
