@@ -2,6 +2,7 @@ from enum import Enum
 from json import JSONEncoder
 import os
 import copy
+import docker_enforcer
 
 
 class Mode(Enum):
@@ -30,4 +31,5 @@ class ConfigEncoder(JSONEncoder):
         out_dict = copy.deepcopy(o).__dict__
         mode = out_dict.pop("mode")
         out_dict["mode"] = mode.__str__()
+        out_dict["version"] = docker_enforcer.version
         return out_dict
