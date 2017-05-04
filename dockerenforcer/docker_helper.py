@@ -2,7 +2,8 @@ import threading
 from json import JSONDecodeError
 
 import time
-from docker import Client
+
+from docker import APIClient
 from docker.errors import NotFound
 from flask import logging
 from requests import ReadTimeout
@@ -29,7 +30,7 @@ class DockerHelper:
         self.__padlock = threading.Lock()
         self.__check_in_progress = False
         self.__config = config
-        self.__client = Client(base_url=config.docker_socket)
+        self.__client = APIClient(base_url=config.docker_socket)
         self.__params_cache = {}
 
     def check_container(self, container_id):
