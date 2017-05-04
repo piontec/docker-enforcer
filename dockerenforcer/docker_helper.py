@@ -1,6 +1,7 @@
 import threading
 from json import JSONDecodeError
 
+import time
 from docker import Client
 from docker.errors import NotFound
 from flask import logging
@@ -45,7 +46,7 @@ class DockerHelper:
                 metrics = {}
             logger.debug("Fetched data for container {0}".format(container_id))
         except NotFound as e:
-            logger.warn("Container {0} not found - error {1}.".format(container_id, e))
+            logger.warning("Container {0} not found - error {1}.".format(container_id, e))
             return None
         except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Communication error when fetching info about container {0}: {1}".format(container_id, e))
@@ -59,7 +60,7 @@ class DockerHelper:
         logger.debug("Connecting to get the list of containers")
         with self.__padlock:
             if self.__check_in_progress:
-                logger.warn("Previous check did not yet complete, consider increasing CHECK_INTERVAL_S")
+                logger.warning("Previous check did not yet complete, consider increasing CHECK_INTERVAL_S")
                 return
             self.__check_in_progress = True
         try:
@@ -95,7 +96,14 @@ class DockerHelper:
             return self.__params_cache[container_id]
 
         logger.debug("Starting to fetch params for {0}".format(container_id))
-        params = self.__client.inspect_container(container_id)
+        try:
+            params = self.__client.inspect_container(container_id)
+        except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
+            logger.error("Communication error when fetching params for container {0}: {1}".format(container_id, e))
+            return {}
+        except Exception as e:
+            logger.error("Unexpected error when fetching params for container {0}: {1}".format(container_id, e))
+            return {}
         logger.debug("Params fetched for {0}".format(container_id))
         if not self.__config.cache_params:
             return params
@@ -110,7 +118,24 @@ class DockerHelper:
             self.__params_cache.pop(cid, None)
 
     def get_start_events_observable(self):
-        return self.__client.events(filters={"event": "start"}, decode=True)
+        successful = False
+        ev = None
+        while not successful:
+            try:
+                ev = self.__client.events(filters={"event": "start"}, decode=True)
+            except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
+                logger.error("Communication error when subscribing for container events, retrying in 5s: {0}".format(e))
+                time.sleep(5)
+            except Exception as e:
+                logger.error("Unexpected error when subscribing for container events, retrying in 5s: {0}".format(e))
+                time.sleep(5)
+            successful = True
+        return ev
 
     def kill_container(self, container):
-        self.__client.stop(container.params['Id'])
+        try:
+            self.__client.stop(container.params['Id'])
+        except (ReadTimeout, ProtocolError) as e:
+            logger.error("Communication error when stopping container {0}: {1}".format(container.cid, e))
+        except Exception as e:
+            logger.error("Unexpected error when stopping container {0}: {1}".format(container.cid, e))
