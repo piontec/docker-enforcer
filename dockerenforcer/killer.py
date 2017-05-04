@@ -53,19 +53,21 @@ containers_stopped_total {0}
 """.format(len(self.__killed_containers))
         return res
 
-    def to_json_detail_stats(self):
+    def to_json_detail_stats(self, output_filter):
         str_list = ""
         with self.__padlock:
             is_first = True
             for k, v in self.__killed_containers.items():
+                if not output_filter(v):
+                    continue
                 if not is_first:
                     str_list += ",\n"
                 else:
                     is_first = False
-                str_list += "{{ \"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": \"{2}\", " \
+                str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": \"{2}\", " \
                             "\"count\": {3}, \"last_timestamp\": \"{4}\" }}"\
                     .format(k, v.name, v.reason, v.counter, v.last_timestamp.isoformat())
-            return "[{0}]".format(str_list)
+            return "[\n{0}\n]".format(str_list)
 
 
 class Verdict:
@@ -83,7 +85,7 @@ class Judge:
 
     def should_be_killed(self, container):
         if not container:
-            logger.warn("No container details, skipping checks")
+            logger.warning("No container details, skipping checks")
             return Verdict(False, container, None)
 
         for rule in self.__rules:
@@ -111,7 +113,7 @@ class Killer(Observer):
             self.__manager.kill_container(verdict.container)
 
     def on_error(self, e):
-        logger.warn("An error occurred while trying to check running containers")
+        logger.warning("An error occurred while trying to check running containers")
         logger.exception(e)
 
     def on_completed(self):
