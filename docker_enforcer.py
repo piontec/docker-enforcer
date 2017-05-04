@@ -90,7 +90,7 @@ app = create_app()
 
 def not_on_white_list(container):
     not_on_list = container.params and container.params['Name'] \
-           and container.params['Name'][1:] not in config.white_list
+                  and container.params['Name'][1:] not in config.white_list
     if not not_on_list:
         app.logger.debug("Container {0} is on white list".format(container.params['Name'][1:]))
     return not_on_list
@@ -117,15 +117,27 @@ def show_metrics():
 
 @app.route('/')
 def show_stats():
-    data = '{{\n"last_full_check_run_timestamp": "{0}",\n"detections":\n{1}\n}}'.format(
-        docker_helper.last_check_containers_run_timestamp,
-                jurek.get_stats().to_json_detail_stats())
-    return to_formatted_json(data)
+    return show_filtered_stats(lambda _: True)
+
+
+@app.route('/recent')
+def show_recent_stats():
+    return show_filtered_stats(lambda c: docker_helper.last_periodic_run_ok and
+                                         c.last_timestamp > docker_helper.last_check_containers_run_start_timestamp)
 
 
 @app.route('/config')
 def show_config():
     data = json.dumps(config, cls=ConfigEncoder, sort_keys=True, indent=4, separators=(',', ': '))
+    return to_formatted_json(data)
+
+
+def show_filtered_stats(stats_filter):
+    data = '{{\n"last_full_check_run_timestamp_start": "{0}",\n' \
+           '"last_full_check_run_timestamp_end": "{1}",\n"detections":\n{2}\n}}'.format(
+        docker_helper.last_check_containers_run_start_timestamp,
+        docker_helper.last_check_containers_run_end_timestamp,
+        jurek.get_stats().to_json_detail_stats(stats_filter))
     return to_formatted_json(data)
 
 

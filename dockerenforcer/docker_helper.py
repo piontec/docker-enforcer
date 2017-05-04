@@ -33,7 +33,9 @@ class DockerHelper:
         self.__config = config
         self.__client = APIClient(base_url=config.docker_socket)
         self.__params_cache = {}
-        self.last_check_containers_run_timestamp = datetime.datetime.min
+        self.last_check_containers_run_end_timestamp = datetime.datetime.min
+        self.last_check_containers_run_start_timestamp = datetime.datetime.min
+        self.last_periodic_run_ok = False
 
     def check_container(self, container_id):
         try:
@@ -61,6 +63,7 @@ class DockerHelper:
 
     def check_containers(self):
         logger.debug("Connecting to get the list of containers")
+        self.last_check_containers_run_start_timestamp = datetime.datetime.utcnow()
         with self.__padlock:
             if self.__check_in_progress:
                 logger.warning("Previous check did not yet complete, consider increasing CHECK_INTERVAL_S")
@@ -73,11 +76,13 @@ class DockerHelper:
             logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
             with self.__padlock:
                 self.__check_in_progress = False
+            self.last_periodic_run_ok = False
             return
         except Exception as e:
             logger.error("Unexpected error while trying to get list of containers from docker: {0}".format(e))
             with self.__padlock:
                 self.__check_in_progress = False
+            self.last_periodic_run_ok = False
             return
         ids = [container['Id'] for container in containers]
         counter = 0
@@ -91,7 +96,8 @@ class DockerHelper:
             self.purge_cache(ids)
         with self.__padlock:
             self.__check_in_progress = False
-        self.last_check_containers_run_timestamp = datetime.datetime.utcnow()
+        self.last_periodic_run_ok = True
+        self.last_check_containers_run_end_timestamp = datetime.datetime.utcnow()
         logger.debug("Periodic check done")
 
     def get_params(self, container_id):
