@@ -117,7 +117,9 @@ def show_metrics():
 
 @app.route('/')
 def show_stats():
-    data = jurek.get_stats().to_json_detail_stats()
+    data = '{{\n"last_full_check_run_timestamp": "{0}",\n"detections":\n{1}\n}}'.format(
+        docker_helper.last_check_containers_run_timestamp,
+                jurek.get_stats().to_json_detail_stats())
     return to_formatted_json(data)
 
 

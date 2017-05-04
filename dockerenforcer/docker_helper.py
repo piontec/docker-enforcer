@@ -1,3 +1,4 @@
+import datetime
 import threading
 from json import JSONDecodeError
 
@@ -32,6 +33,7 @@ class DockerHelper:
         self.__config = config
         self.__client = APIClient(base_url=config.docker_socket)
         self.__params_cache = {}
+        self.last_check_containers_run_timestamp = datetime.datetime.min
 
     def check_container(self, container_id):
         try:
@@ -89,6 +91,7 @@ class DockerHelper:
             self.purge_cache(ids)
         with self.__padlock:
             self.__check_in_progress = False
+        self.last_check_containers_run_timestamp = datetime.datetime.utcnow()
         logger.debug("Periodic check done")
 
     def get_params(self, container_id):

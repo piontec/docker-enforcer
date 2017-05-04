@@ -62,10 +62,10 @@ containers_stopped_total {0}
                     str_list += ",\n"
                 else:
                     is_first = False
-                str_list += "{{ \"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": \"{2}\", " \
+                str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": \"{2}\", " \
                             "\"count\": {3}, \"last_timestamp\": \"{4}\" }}"\
                     .format(k, v.name, v.reason, v.counter, v.last_timestamp.isoformat())
-            return "[{0}]".format(str_list)
+            return "[\n{0}\n]".format(str_list)
 
 
 class Verdict:

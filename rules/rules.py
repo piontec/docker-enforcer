@@ -1,6 +1,6 @@
 rules = [
     {
         "name": "always false",
-        "rule": lambda c: False
+        "rule": lambda c: True
     }
 ]
