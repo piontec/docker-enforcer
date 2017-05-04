@@ -122,8 +122,7 @@ def show_stats():
 
 @app.route('/recent')
 def show_recent_stats():
-    return show_filtered_stats(lambda c: docker_helper.last_periodic_run_ok and
-                                         c.last_timestamp > docker_helper.last_check_containers_run_start_timestamp)
+    return show_filtered_stats(lambda c: c.last_timestamp > docker_helper.last_check_containers_run_start_timestamp)
 
 
 @app.route('/config')

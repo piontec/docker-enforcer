@@ -51,7 +51,7 @@ class DockerHelper:
                 metrics = {}
             logger.debug("Fetched data for container {0}".format(container_id))
         except NotFound as e:
-            logger.warning("Container {0} not found - error {1}.".format(container_id, e))
+            logger.warning("Container {0} not found - {1}.".format(container_id, e))
             return None
         except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Communication error when fetching info about container {0}: {1}".format(container_id, e))
@@ -108,6 +108,9 @@ class DockerHelper:
         logger.debug("Starting to fetch params for {0}".format(container_id))
         try:
             params = self.__client.inspect_container(container_id)
+        except NotFound as e:
+            logger.warning("Container {0} not found - {1}.".format(container_id, e))
+            return None
         except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Communication error when fetching params for container {0}: {1}".format(container_id, e))
             return {}
