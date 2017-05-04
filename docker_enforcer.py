@@ -5,17 +5,21 @@ import signal
 import sys
 from logging import StreamHandler
 
-from flask import Flask
-from flask import Response
+from flask import Flask, Response, request
 from rx import Observable
 from rx.concurrency import NewThreadScheduler
 
-from dockerenforcer.config import Config
+from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
 from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
 
-version = "0.3.3"
+from pygments import highlight
+from pygments.lexers.data import JsonLexer
+from pygments.lexers.python import Python3Lexer
+from pygments.formatters.html import HtmlFormatter
+
+version = "0.4.0"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
@@ -86,7 +90,7 @@ app = create_app()
 
 def not_on_white_list(container):
     not_on_list = container.params and container.params['Name'] \
-           and container.params['Name'][1:] not in config.white_list
+                  and container.params['Name'][1:] not in config.white_list
     if not not_on_list:
         app.logger.debug("Container {0} is on white list".format(container.params['Name'][1:]))
     return not_on_list
@@ -94,9 +98,14 @@ def not_on_white_list(container):
 
 @app.route('/rules')
 def show_rules():
+    if request.accept_mimetypes.accept_html:
+        with open("rules/rules.py", "r") as file:
+            data = file.read()
+            html = highlight(data, Python3Lexer(), HtmlFormatter(full=True, linenos='table'))
+            return Response(html, content_type="text/html")
     rules_txt = [{"name": d["name"], "rule": inspect.getsource(d["rule"]).strip().split(':', 1)[1].strip()} for d in
                  rules]
-    data = json.dumps(rules_txt)
+    data = json.dumps(rules_txt, sort_keys=True, indent=4, separators=(',', ': '))
     return Response(data, content_type="application/json")
 
 
@@ -108,5 +117,31 @@ def show_metrics():
 
 @app.route('/')
 def show_stats():
-    data = jurek.get_stats().to_json_detail_stats()
+    return show_filtered_stats(lambda _: True)
+
+
+@app.route('/recent')
+def show_recent_stats():
+    return show_filtered_stats(lambda c: c.last_timestamp > docker_helper.last_check_containers_run_start_timestamp)
+
+
+@app.route('/config')
+def show_config():
+    data = json.dumps(config, cls=ConfigEncoder, sort_keys=True, indent=4, separators=(',', ': '))
+    return to_formatted_json(data)
+
+
+def show_filtered_stats(stats_filter):
+    data = '{{\n"last_full_check_run_timestamp_start": "{0}",\n' \
+           '"last_full_check_run_timestamp_end": "{1}",\n"detections":\n{2}\n}}'.format(
+        docker_helper.last_check_containers_run_start_timestamp,
+        docker_helper.last_check_containers_run_end_timestamp,
+        jurek.get_stats().to_json_detail_stats(stats_filter))
+    return to_formatted_json(data)
+
+
+def to_formatted_json(data):
+    if request.accept_mimetypes.accept_html:
+        html = highlight(data, JsonLexer(), HtmlFormatter(full=True, linenos='table'))
+        return Response(html, content_type="text/html")
     return Response(data, content_type="application/json")

@@ -1,6 +1,8 @@
 from enum import Enum
+from json import JSONEncoder
 import os
-import logging
+import copy
+import docker_enforcer
 
 
 class Mode(Enum):
@@ -22,3 +24,12 @@ class Config:
         self.disable_metrics = bool(os.getenv('DISABLE_METRICS', 'False') == 'True')
         self.run_start_events = bool(os.getenv('RUN_START_EVENTS', 'False') == 'True')
         self.run_periodic = bool(os.getenv('RUN_PERIODIC', 'True') == 'True')
+
+
+class ConfigEncoder(JSONEncoder):
+    def default(self, o):
+        out_dict = copy.deepcopy(o).__dict__
+        mode = out_dict.pop("mode")
+        out_dict["mode"] = mode.__str__()
+        out_dict["version"] = docker_enforcer.version
+        return out_dict
