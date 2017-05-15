@@ -19,7 +19,7 @@ from pygments.lexers.data import JsonLexer
 from pygments.lexers.python import Python3Lexer
 from pygments.formatters.html import HtmlFormatter
 
-version = "0.4.0"
+version = "0.4.1"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
@@ -133,10 +133,13 @@ def show_config():
 
 def show_filtered_stats(stats_filter):
     data = '{{\n"last_full_check_run_timestamp_start": "{0}",\n' \
-           '"last_full_check_run_timestamp_end": "{1}",\n"detections":\n{2}\n}}'.format(
-        docker_helper.last_check_containers_run_start_timestamp,
-        docker_helper.last_check_containers_run_end_timestamp,
-        jurek.get_stats().to_json_detail_stats(stats_filter))
+           '"last_full_check_run_timestamp_end": "{1}",\n' \
+           '"last_full_check_run_time": "{2}",\n' \
+           '"detections":\n{3}\n}}'.format(
+               docker_helper.last_check_containers_run_start_timestamp,
+               docker_helper.last_check_containers_run_end_timestamp,
+               docker_helper.last_check_containers_run_time,
+               jurek.get_stats().to_json_detail_stats(stats_filter))
     return to_formatted_json(data)
 
 

@@ -31,22 +31,23 @@ class DockerHelper:
         self.__padlock = threading.Lock()
         self.__check_in_progress = False
         self.__config = config
-        self.__client = APIClient(base_url=config.docker_socket)
+        self.__client = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
         self.__params_cache = {}
         self.last_check_containers_run_end_timestamp = datetime.datetime.min
         self.last_check_containers_run_start_timestamp = datetime.datetime.min
+        self.last_check_containers_run_time = datetime.timedelta.min
         self.last_periodic_run_ok = False
 
     def check_container(self, container_id):
         try:
             if not self.__config.disable_params:
+                logger.debug("Starting to fetch params for {0}".format(container_id))
                 params = self.get_params(container_id)
             else:
                 params = {}
             if not self.__config.disable_metrics:
                 logger.debug("Starting to fetch metrics for {0}".format(container_id))
                 metrics = self.__client.stats(container=container_id, decode=True, stream=False)
-                logger.debug("Metrics fetched for {0}".format(container_id))
             else:
                 metrics = {}
             logger.debug("Fetched data for container {0}".format(container_id))
@@ -62,15 +63,15 @@ class DockerHelper:
         return Container(container_id, params, metrics, 0)
 
     def check_containers(self):
-        logger.debug("Connecting to get the list of containers")
-        self.last_check_containers_run_start_timestamp = datetime.datetime.utcnow()
         with self.__padlock:
             if self.__check_in_progress:
                 logger.warning("Previous check did not yet complete, consider increasing CHECK_INTERVAL_S")
                 return
             self.__check_in_progress = True
+        logger.debug("Connecting to get the list of containers")
+        self.last_check_containers_run_start_timestamp = datetime.datetime.utcnow()
         try:
-            containers = sorted(self.__client.containers(), key=lambda c: c["Created"])
+            containers = self.__client.containers(quiet=True)
             logger.debug("Fetched containers list from docker daemon")
         except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
@@ -85,20 +86,22 @@ class DockerHelper:
             self.last_periodic_run_ok = False
             return
         ids = [container['Id'] for container in containers]
-        counter = 0
         for container_id in ids:
             container = self.check_container(container_id)
             if container is None:
                 continue
-            counter += 1
             yield container
+        logger.debug("Containers checked")
         if self.__config.cache_params:
+            logger.debug("Purging cache")
             self.purge_cache(ids)
-        with self.__padlock:
-            self.__check_in_progress = False
         self.last_periodic_run_ok = True
         self.last_check_containers_run_end_timestamp = datetime.datetime.utcnow()
+        self.last_check_containers_run_time = self.last_check_containers_run_end_timestamp \
+            - self.last_check_containers_run_start_timestamp
         logger.debug("Periodic check done")
+        with self.__padlock:
+            self.__check_in_progress = False
 
     def get_params(self, container_id):
         if self.__config.cache_params and container_id in self.__params_cache:
