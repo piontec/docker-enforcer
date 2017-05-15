@@ -15,6 +15,7 @@ class Config:
     def __init__(self):
         super().__init__()
         self.interval_sec = int(os.getenv('CHECK_INTERVAL_S', '600'))
+        self.docker_req_timeout_sec = int(os.getenv('DOCKER_REQ_TIMEOUT_S', '30'))
         self.docker_socket = os.getenv('DOCKER_SOCKET', 'unix:///var/run/docker.sock')
         self.white_list = os.getenv('WHITE_LIST', 'docker-enforcer docker_enforcer').split()
         self.mode = Mode[os.getenv('MODE', 'WARN').lower().capitalize()]

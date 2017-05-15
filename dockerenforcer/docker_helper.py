@@ -31,7 +31,7 @@ class DockerHelper:
         self.__padlock = threading.Lock()
         self.__check_in_progress = False
         self.__config = config
-        self.__client = APIClient(base_url=config.docker_socket)
+        self.__client = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
         self.__params_cache = {}
         self.last_check_containers_run_end_timestamp = datetime.datetime.min
         self.last_check_containers_run_start_timestamp = datetime.datetime.min
@@ -62,13 +62,13 @@ class DockerHelper:
         return Container(container_id, params, metrics, 0)
 
     def check_containers(self):
-        logger.debug("Connecting to get the list of containers")
-        self.last_check_containers_run_start_timestamp = datetime.datetime.utcnow()
         with self.__padlock:
             if self.__check_in_progress:
                 logger.warning("Previous check did not yet complete, consider increasing CHECK_INTERVAL_S")
                 return
             self.__check_in_progress = True
+        logger.debug("Connecting to get the list of containers")
+        self.last_check_containers_run_start_timestamp = datetime.datetime.utcnow()
         try:
             containers = sorted(self.__client.containers(), key=lambda c: c["Created"])
             logger.debug("Fetched containers list from docker daemon")
@@ -85,12 +85,10 @@ class DockerHelper:
             self.last_periodic_run_ok = False
             return
         ids = [container['Id'] for container in containers]
-        counter = 0
         for container_id in ids:
             container = self.check_container(container_id)
             if container is None:
                 continue
-            counter += 1
             yield container
         if self.__config.cache_params:
             self.purge_cache(ids)
