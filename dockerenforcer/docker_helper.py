@@ -35,18 +35,19 @@ class DockerHelper:
         self.__params_cache = {}
         self.last_check_containers_run_end_timestamp = datetime.datetime.min
         self.last_check_containers_run_start_timestamp = datetime.datetime.min
+        self.last_check_containers_run_time = datetime.timedelta.min
         self.last_periodic_run_ok = False
 
     def check_container(self, container_id):
         try:
             if not self.__config.disable_params:
+                logger.debug("Starting to fetch params for {0}".format(container_id))
                 params = self.get_params(container_id)
             else:
                 params = {}
             if not self.__config.disable_metrics:
                 logger.debug("Starting to fetch metrics for {0}".format(container_id))
                 metrics = self.__client.stats(container=container_id, decode=True, stream=False)
-                logger.debug("Metrics fetched for {0}".format(container_id))
             else:
                 metrics = {}
             logger.debug("Fetched data for container {0}".format(container_id))
@@ -70,7 +71,7 @@ class DockerHelper:
         logger.debug("Connecting to get the list of containers")
         self.last_check_containers_run_start_timestamp = datetime.datetime.utcnow()
         try:
-            containers = sorted(self.__client.containers(), key=lambda c: c["Created"])
+            containers = self.__client.containers(quiet=True)
             logger.debug("Fetched containers list from docker daemon")
         except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
@@ -96,6 +97,8 @@ class DockerHelper:
             self.purge_cache(ids)
         self.last_periodic_run_ok = True
         self.last_check_containers_run_end_timestamp = datetime.datetime.utcnow()
+        self.last_check_containers_run_time = self.last_check_containers_run_end_timestamp \
+            - self.last_check_containers_run_start_timestamp
         logger.debug("Periodic check done")
         with self.__padlock:
             self.__check_in_progress = False

@@ -138,7 +138,7 @@ def show_filtered_stats(stats_filter):
            '"detections":\n{3}\n}}'.format(
                docker_helper.last_check_containers_run_start_timestamp,
                docker_helper.last_check_containers_run_end_timestamp,
-               docker_helper.last_check_containers_run_end_timestamp - docker_helper.last_check_containers_run_start_timestamp,
+               docker_helper.last_check_containers_run_time,
                jurek.get_stats().to_json_detail_stats(stats_filter))
     return to_formatted_json(data)
 
