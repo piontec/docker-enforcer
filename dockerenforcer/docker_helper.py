@@ -90,13 +90,15 @@ class DockerHelper:
             if container is None:
                 continue
             yield container
+        logger.debug("Containers checked")
         if self.__config.cache_params:
+            logger.debug("Purging cache")
             self.purge_cache(ids)
-        with self.__padlock:
-            self.__check_in_progress = False
         self.last_periodic_run_ok = True
         self.last_check_containers_run_end_timestamp = datetime.datetime.utcnow()
         logger.debug("Periodic check done")
+        with self.__padlock:
+            self.__check_in_progress = False
 
     def get_params(self, container_id):
         if self.__config.cache_params and container_id in self.__params_cache:
