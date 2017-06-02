@@ -121,3 +121,24 @@ class Killer(Observer):
 
     def get_stats(self):
         return self.__status.copy()
+
+
+class TriggerHandler(Observer):
+    def __init__(self):
+        super().__init__()
+        # TODO: implement loading
+        self.__triggers = []
+
+    def on_next(self, verdict):
+        for trigger in self.__triggers:
+            try:
+                trigger(verdict)
+            except Exception as e:
+                logger.error("During execution of trigger {0} exception was raised: {1}".format(trigger, e))
+
+    def on_error(self, e):
+        logger.warning("An error occurred while waiting for detections")
+        logger.exception(e)
+
+    def on_completed(self):
+        logger.error("This should never happen. Please contact the dev")

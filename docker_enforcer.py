@@ -5,13 +5,14 @@ import signal
 import sys
 from logging import StreamHandler
 
+import multiprocessing
 from flask import Flask, Response, request
 from rx import Observable
-from rx.concurrency import NewThreadScheduler
+from rx.concurrency import ThreadPoolScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
-from dockerenforcer.killer import Killer, Judge
+from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 
 from pygments import highlight
@@ -19,11 +20,12 @@ from pygments.lexers.data import JsonLexer
 from pygments.lexers.python import Python3Lexer
 from pygments.formatters.html import HtmlFormatter
 
-version = "0.4.1"
+version = "0.5-dev"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
 jurek = Killer(docker_helper, config.mode)
+trigger_handler = TriggerHandler()
 
 
 def create_app():
@@ -46,7 +48,6 @@ def create_app():
 
     if config.run_start_events:
         start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
-            .observe_on(scheduler=NewThreadScheduler()) \
             .map(lambda e: e['id']) \
             .map(lambda cid: docker_helper.check_container(cid))
 
@@ -56,7 +57,10 @@ def create_app():
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
-    if config.run_start_events and not config.run_periodic:
+    if not config.run_start_events and not config.run_periodic:
+        flask_app.logger.fatal("Either start events or periodic checks need to be enabled")
+        raise Exception("No run mode specified. Please set either RUN_START_EVENTS or RUN_PERIODIC")
+    elif config.run_start_events and not config.run_periodic:
         detections = start_events
     elif not config.run_start_events and config.run_periodic:
         detections = periodic
@@ -68,14 +72,20 @@ def create_app():
         .map(lambda container: judge.should_be_killed(container)) \
         .where(lambda v: v.verdict)
 
-    subscription = verdicts \
+    pool_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
+    threaded_vedicts = verdicts \
         .retry() \
-        .subscribe_on(NewThreadScheduler()) \
-        .subscribe(jurek)
+        .subscribe_on(pool_scheduler) \
+        .publish()\
+        .auto_connect(2)
+
+    killer_subs = threaded_vedicts.subscribe(jurek)
+    trigger_subs = threaded_vedicts.subscribe(trigger_handler)
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
-        subscription.dispose()
+        killer_subs.dispose()
+        trigger_subs.dispose()
         flask_app.logger.debug("Complete, ready to finish")
         raise KeyboardInterrupt()
 
