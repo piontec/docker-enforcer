@@ -41,16 +41,16 @@ class DockerHelper:
     def check_container(self, container_id):
         try:
             if not self.__config.disable_params:
-                logger.debug("Starting to fetch params for {0}".format(container_id))
                 params = self.get_params(container_id)
             else:
                 params = {}
             if not self.__config.disable_metrics:
-                logger.debug("Starting to fetch metrics for {0}".format(container_id))
+                logger.debug("[{0}] Starting to fetch metrics for {1}".format(threading.current_thread().name,
+                                                                              container_id))
                 metrics = self.__client.stats(container=container_id, decode=True, stream=False)
             else:
                 metrics = {}
-            logger.debug("Fetched data for container {0}".format(container_id))
+            logger.debug("[{0}] Fetched data for container {1}".format(threading.current_thread().name, container_id))
         except NotFound as e:
             logger.warning("Container {0} not found - {1}.".format(container_id, e))
             return None
@@ -72,7 +72,7 @@ class DockerHelper:
         self.last_check_containers_run_start_timestamp = datetime.datetime.utcnow()
         try:
             containers = self.__client.containers(quiet=True)
-            logger.debug("Fetched containers list from docker daemon")
+            logger.debug("[{0}] Fetched containers list from docker daemon".format(threading.current_thread().name))
         except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
             with self.__padlock:
@@ -108,7 +108,7 @@ class DockerHelper:
             logger.debug("Returning cached params for container {0}".format(container_id))
             return self.__params_cache[container_id]
 
-        logger.debug("Starting to fetch params for {0}".format(container_id))
+        logger.debug("[{0}] Starting to fetch params for {1}".format(threading.current_thread().name, container_id))
         try:
             params = self.__client.inspect_container(container_id)
         except NotFound as e:
@@ -120,11 +120,11 @@ class DockerHelper:
         except Exception as e:
             logger.error("Unexpected error when fetching params for container {0}: {1}".format(container_id, e))
             return {}
-        logger.debug("Params fetched for {0}".format(container_id))
+        logger.debug("[{0}] Params fetched for {1}".format(threading.current_thread().name, container_id))
         if not self.__config.cache_params:
             return params
 
-        logger.debug("Storing params of {0} in cache".format(container_id))
+        logger.debug("[{0}] Storing params of {1} in cache".format(threading.current_thread().name, container_id))
         self.__params_cache[container_id] = params
         return params
 

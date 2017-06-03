@@ -73,14 +73,14 @@ def create_app():
         .where(lambda v: v.verdict)
 
     pool_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
-    threaded_vedicts = verdicts \
+    threaded_verdicts = verdicts \
         .retry() \
         .subscribe_on(pool_scheduler) \
         .publish()\
         .auto_connect(2)
 
-    killer_subs = threaded_vedicts.subscribe(jurek)
-    trigger_subs = threaded_vedicts.subscribe(trigger_handler)
+    killer_subs = threaded_verdicts.subscribe(jurek)
+    trigger_subs = threaded_verdicts.subscribe(trigger_handler)
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
