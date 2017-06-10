@@ -132,7 +132,7 @@ class TriggerHandler(Observer):
     def on_next(self, verdict):
         for trigger in self.__triggers:
             try:
-                trigger(verdict)
+                trigger["trigger"](verdict)
             except Exception as e:
                 logger.error("During execution of trigger {0} exception was raised: {1}".format(trigger, e))
 

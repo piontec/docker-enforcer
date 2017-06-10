@@ -8,7 +8,7 @@ from logging import StreamHandler
 import multiprocessing
 from flask import Flask, Response, request
 from rx import Observable
-from rx.concurrency import ThreadPoolScheduler
+from rx.concurrency import ThreadPoolScheduler, NewThreadScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
@@ -46,16 +46,16 @@ def create_app():
     if not (config.run_start_events or config.run_periodic):
         raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
-    pool_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
+    task_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
     if config.run_start_events:
         start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
+            .observe_on(scheduler=task_scheduler) \
             .map(lambda e: e['id']) \
             .map(lambda cid: docker_helper.check_container(cid))
 
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000) \
             .start_with(-1) \
-            .observe_on(scheduler=pool_scheduler) \
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
@@ -76,7 +76,7 @@ def create_app():
 
     threaded_verdicts = verdicts \
         .retry() \
-        .subscribe_on(pool_scheduler) \
+        .subscribe_on(task_scheduler) \
         .publish()\
         .auto_connect(2)
 
