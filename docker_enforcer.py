@@ -46,6 +46,7 @@ def create_app():
     if not (config.run_start_events or config.run_periodic):
         raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
+    pool_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
     if config.run_start_events:
         start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
             .map(lambda e: e['id']) \
@@ -54,6 +55,7 @@ def create_app():
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000) \
             .start_with(-1) \
+            .observe_on(scheduler=pool_scheduler) \
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
@@ -72,7 +74,6 @@ def create_app():
         .map(lambda container: judge.should_be_killed(container)) \
         .where(lambda v: v.verdict)
 
-    pool_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
     threaded_verdicts = verdicts \
         .retry() \
         .subscribe_on(pool_scheduler) \

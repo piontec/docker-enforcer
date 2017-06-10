@@ -6,6 +6,7 @@ from flask import logging
 from rx import Observer
 
 from dockerenforcer.config import Mode
+from triggers.triggers import triggers
 
 logger = logging.getLogger("docker_enforcer")
 
@@ -126,8 +127,7 @@ class Killer(Observer):
 class TriggerHandler(Observer):
     def __init__(self):
         super().__init__()
-        # TODO: implement loading
-        self.__triggers = []
+        self.__triggers = triggers
 
     def on_next(self, verdict):
         for trigger in self.__triggers:
