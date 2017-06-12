@@ -53,6 +53,7 @@ def create_app():
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000) \
             .start_with(-1) \
+            .observe_on(scheduler=NewThreadScheduler()) \
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
