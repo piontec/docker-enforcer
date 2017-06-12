@@ -11,7 +11,7 @@ from rx.concurrency import NewThreadScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
-from dockerenforcer.killer import Killer, Judge
+from dockerenforcer.killer import Killer, Judge, CacheInvalidator
 from rules.rules import rules
 
 from pygments import highlight
@@ -19,7 +19,7 @@ from pygments.lexers.data import JsonLexer
 from pygments.lexers.python import Python3Lexer
 from pygments.formatters.html import HtmlFormatter
 
-version = "0.4.1"
+version = "0.4.2"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
@@ -52,7 +52,6 @@ def create_app():
 
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000) \
-            .start_with(-1) \
             .observe_on(scheduler=NewThreadScheduler()) \
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
@@ -71,12 +70,19 @@ def create_app():
 
     subscription = verdicts \
         .retry() \
-        .subscribe_on(NewThreadScheduler()) \
         .subscribe(jurek)
+
+    if config.cache_params:
+        updates_subscription = Observable.from_iterable(docker_helper.get_update_events_observable()) \
+            .map(lambda e: e['id']) \
+            .retry() \
+            .subscribe(CacheInvalidator(docker_helper))
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
         subscription.dispose()
+        if config.cache_params:
+            updates_subscription.dispose()
         flask_app.logger.debug("Complete, ready to finish")
         raise KeyboardInterrupt()
 
