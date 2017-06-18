@@ -11,7 +11,8 @@ from rx.concurrency import NewThreadScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
-from dockerenforcer.killer import Killer, Judge, CacheInvalidator
+#from dockerenforcer.killer import Killer, Judge, CacheInvalidator
+from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
 
 from pygments import highlight
@@ -44,11 +45,13 @@ def create_app():
     if not (config.run_start_events or config.run_periodic):
         raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
-    if config.run_start_events:
-        start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
+    run_events = config.run_start_events or config.run_update_events or config.run_rename_events
+    if run_events:
+        events = Observable.from_iterable(docker_helper.get_events_observable()) \
             .observe_on(scheduler=NewThreadScheduler()) \
+            .where(lambda e: is_configured_event(e)) \
             .map(lambda e: e['id']) \
-            .map(lambda cid: docker_helper.check_container(cid))
+            .map(lambda cid: docker_helper.check_container(cid, True))
 
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000) \
@@ -56,12 +59,12 @@ def create_app():
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
-    if config.run_start_events and not config.run_periodic:
-        detections = start_events
-    elif not config.run_start_events and config.run_periodic:
+    if run_events and not config.run_periodic:
+        detections = events
+    elif not run_events and config.run_periodic:
         detections = periodic
     else:
-        detections = start_events.merge(periodic)
+        detections = events.merge(periodic)
 
     verdicts = detections \
         .where(lambda c: not_on_white_list(c)) \
@@ -70,19 +73,20 @@ def create_app():
 
     subscription = verdicts \
         .retry() \
+        .subscribe_on(NewThreadScheduler()) \
         .subscribe(jurek)
 
-    if config.cache_params:
-        updates_subscription = Observable.from_iterable(docker_helper.get_update_events_observable()) \
-            .map(lambda e: e['id']) \
-            .retry() \
-            .subscribe(CacheInvalidator(docker_helper))
+    # if config.cache_params:
+    #     updates_subscription = Observable.from_iterable(docker_helper.get_update_events_observable()) \
+    #         .map(lambda e: e['id']) \
+    #         .retry() \
+    #         .subscribe(CacheInvalidator(docker_helper))
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
         subscription.dispose()
-        if config.cache_params:
-            updates_subscription.dispose()
+        # if config.cache_params:
+        #     updates_subscription.dispose()
         flask_app.logger.debug("Complete, ready to finish")
         raise KeyboardInterrupt()
 
@@ -101,6 +105,16 @@ def not_on_white_list(container):
     if not not_on_list:
         app.logger.debug("Container {0} is on white list".format(container.params['Name'][1:]))
     return not_on_list
+
+
+def is_configured_event(e):
+    if e['Action'] == 'rename' and config.run_rename_events:
+        return True
+    if e['Action'] == 'update' and config.run_update_events:
+        return True
+    if e['Action'] == 'start' and config.run_start_events:
+        return True
+    return False
 
 
 @app.route('/rules')
