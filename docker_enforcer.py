@@ -19,7 +19,7 @@ from pygments.lexers.data import JsonLexer
 from pygments.lexers.python import Python3Lexer
 from pygments.formatters.html import HtmlFormatter
 
-version = "0.4.2"
+version = "0.4.3"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules)
@@ -99,7 +99,8 @@ def not_on_white_list(container):
     not_on_list = container.params and container.params['Name'] \
                   and container.params['Name'][1:] not in config.white_list
     if not not_on_list:
-        app.logger.debug("Container {0} is on white list".format(container.params['Name'][1:]))
+        name = container.params['Name'] if container.params and container.params['Name'] else container.cid
+        app.logger.debug("Container {0} is on white list".format(name))
     return not_on_list
 
 
