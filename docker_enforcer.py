@@ -132,22 +132,6 @@ def show_recent_stats():
     return show_filtered_stats(lambda c: c.last_timestamp > docker_helper.last_check_containers_run_start_timestamp)
 
 
-@app.route('/recent_detections_with_all_violated_rules')
-def recent_detections_with_all_violated_rules():
-    ext_info = docker_helper.get_detections(jurek, judge)
-
-    data = json.dumps(ext_info, sort_keys=True, indent=4, separators=(',', ': '))
-    return to_formatted_json(data)
-
-
-@app.route('/detections_with_labels')
-def detections_with_labels():
-    ext_info = docker_helper.get_detections(jurek, judge, False, False)
-
-    data = json.dumps(ext_info, sort_keys=True, indent=4, separators=(',', ': '))
-    return to_formatted_json(data)
-
-
 @app.route('/config')
 def show_config():
     data = json.dumps(config, cls=ConfigEncoder, sort_keys=True, indent=4, separators=(',', ': '))
