@@ -163,3 +163,53 @@ class DockerHelper:
             logger.error("Communication error when stopping container {0}: {1}".format(container.cid, e))
         except Exception as e:
             logger.error("Unexpected error when stopping container {0}: {1}".format(container.cid, e))
+
+    def get_recent_detections_with_all_violated_rules(self, jurek, judge):
+        return self.get_detections(jurek, judge)
+
+
+    def get_detections(self, jurek, judge, filter_recent=True, add_violated_rules=True):
+        if not self.__config.cache_params:
+            return []
+
+        stats = jurek.get_stats().get_items()
+
+        if filter_recent:
+            stats = filter(lambda s: s[1].last_timestamp > self.last_check_containers_run_start_timestamp, stats)
+
+        info = []
+        for cid, stat in stats:
+            obj = {"stat": stat, "cid": cid}
+
+            if add_violated_rules and cid in self.__params_cache:
+                obj["container"] = Container(cid, self.__params_cache[cid], {}, 0)
+
+            info.append(obj)
+
+        ext_info = {
+            "last_full_check_run_timestamp_start": self.last_check_containers_run_start_timestamp.isoformat(),
+            "last_full_check_run_timestamp_end": self.last_check_containers_run_end_timestamp.isoformat(),
+            "last_full_check_run_time": str(self.last_check_containers_run_time),
+            "detections": list(map(lambda i: self.make_extended_detection(i, judge, add_violated_rules), info))
+        }
+
+        return ext_info
+
+
+    @staticmethod
+    def make_extended_detection(i, judge, violated_rules = True):
+        stat = i["stat"]
+        res = {
+            "cid": i["cid"],
+            "name": stat.name,
+            "image": stat.image,
+            "labels": stat.labels,
+            "reason": stat.reason,
+            "counter": stat.counter,
+            "last_timestamp": i["stat"].last_timestamp.isoformat()
+        }
+
+        if violated_rules:
+            res["v_rules"] = judge.all_violated_rules(i["container"])
+
+        return res

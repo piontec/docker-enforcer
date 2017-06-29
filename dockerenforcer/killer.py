@@ -11,12 +11,14 @@ logger = logging.getLogger("docker_enforcer")
 
 
 class Stat:
-    def __init__(self, name, reason):
+    def __init__(self, name, reason, image, labels):
         super().__init__()
         self.counter = 1
         self.last_timestamp = datetime.datetime.utcnow()
         self.name = name
         self.reason = reason
+        self.image = image
+        self.labels = labels
 
     def record_new(self, reason):
         self.counter += 1
@@ -38,7 +40,9 @@ class StatusDictionary:
             if container.cid in self.__killed_containers.keys():
                 self.__killed_containers[container.cid].record_new(reason)
             else:
-                self.__killed_containers[container.cid] = Stat(container.params['Name'], reason)
+                self.__killed_containers[container.cid] = Stat(
+                    container.params['Name'], reason, container.params['Config']['Image'], container.params['Config']['Labels']
+                )
 
     def copy(self):
         with self.__padlock:
@@ -69,6 +73,10 @@ containers_stopped_total {0}
                     .format(k, v.name, v.reason, v.counter, v.last_timestamp.isoformat())
             return "[\n{0}\n]".format(str_list)
 
+    def get_items(self):
+        return self.__killed_containers.items()
+
+
 
 class Verdict:
     def __init__(self, verdict, container, reason):
@@ -96,6 +104,19 @@ class Judge:
                 logger.error("During execution of rule {0} exception was raised: {1}".format(rule['name'], e))
         return Verdict(False, container, None)
 
+    def all_violated_rules(self, container):
+        if not container:
+            return []
+
+        v_rules = []
+        for rule in self.__rules:
+            try:
+                if rule['rule'](container):
+                    v_rules.append(rule['name'])
+            except Exception as e:
+                v_rules.append("Exception - rule: {0}, class: {1}, val: {2}".format(rule['name'], e.__class__.__name__, str(e)))
+
+        return v_rules
 
 class Killer(Observer):
     def __init__(self, manager, mode):
