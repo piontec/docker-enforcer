@@ -46,6 +46,7 @@ def create_app():
     if not (config.run_start_events or config.run_periodic):
         raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
+    # task_scheduler = NewThreadScheduler()
     task_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
     if config.run_start_events:
         start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
@@ -87,6 +88,7 @@ def create_app():
         updates_subscription = Observable.from_iterable(docker_helper.get_update_events_observable()) \
             .map(lambda e: e['id']) \
             .retry() \
+            .subscribe_on(task_scheduler) \
             .subscribe(CacheInvalidator(docker_helper))
 
     def on_exit(sig, frame):
