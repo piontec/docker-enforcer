@@ -142,3 +142,20 @@ class TriggerHandler(Observer):
 
     def on_completed(self):
         logger.error("This should never happen. Please contact the dev")
+
+
+class CacheInvalidator(Observer):
+    def __init__(self, docker_helper):
+        super().__init__()
+        self.__helper = docker_helper
+
+    def on_next(self, cid):
+        logger.debug("Container {0} has changed its config, removing from cache".format(cid))
+        self.__helper.remove_from_cache(cid)
+
+    def on_error(self, e):
+        logger.warning("An error occurred while trying to get container config updates")
+        logger.exception(e)
+
+    def on_completed(self):
+        logger.error("This should never happen. Please contact the dev")

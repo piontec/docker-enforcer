@@ -12,7 +12,7 @@ from rx.concurrency import ThreadPoolScheduler, NewThreadScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
-from dockerenforcer.killer import Killer, Judge, TriggerHandler
+from dockerenforcer.killer import Killer, Judge, TriggerHandler, CacheInvalidator
 from rules.rules import rules
 
 from pygments import highlight
@@ -55,7 +55,7 @@ def create_app():
 
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000) \
-            .start_with(-1) \
+            .observe_on(scheduler=NewThreadScheduler()) \
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
@@ -83,10 +83,18 @@ def create_app():
     killer_subs = threaded_verdicts.subscribe(jurek)
     trigger_subs = threaded_verdicts.subscribe(trigger_handler)
 
+    if config.cache_params:
+        updates_subscription = Observable.from_iterable(docker_helper.get_update_events_observable()) \
+            .map(lambda e: e['id']) \
+            .retry() \
+            .subscribe(CacheInvalidator(docker_helper))
+
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
         killer_subs.dispose()
         trigger_subs.dispose()
+        if config.cache_params:
+            updates_subscription.dispose()
         flask_app.logger.debug("Complete, ready to finish")
         raise KeyboardInterrupt()
 
@@ -103,7 +111,8 @@ def not_on_white_list(container):
     not_on_list = container.params and container.params['Name'] \
                   and container.params['Name'][1:] not in config.white_list
     if not not_on_list:
-        app.logger.debug("Container {0} is on white list".format(container.params['Name'][1:]))
+        name = container.params['Name'] if container.params and container.params['Name'] else container.cid
+        app.logger.debug("Container {0} is on white list".format(name))
     return not_on_list
 
 
