@@ -11,7 +11,6 @@ from rx.concurrency import NewThreadScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
-#from dockerenforcer.killer import Killer, Judge, CacheInvalidator
 from dockerenforcer.killer import Killer, Judge
 from rules.rules import rules
 
@@ -45,13 +44,12 @@ def create_app():
     if not (config.run_start_events or config.run_periodic):
         raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
-    run_events = config.run_start_events or config.run_update_events or config.run_rename_events
-    if run_events:
+    if config.run_start_events:
         events = Observable.from_iterable(docker_helper.get_events_observable()) \
             .observe_on(scheduler=NewThreadScheduler()) \
             .where(lambda e: is_configured_event(e)) \
             .map(lambda e: e['id']) \
-            .map(lambda cid: docker_helper.check_container(cid, True))
+            .map(lambda cid: docker_helper.check_container(cid, remove_from_cache=True))
 
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000) \
@@ -59,12 +57,11 @@ def create_app():
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
-    if run_events and not config.run_periodic:
-        detections = events
-    elif not run_events and config.run_periodic:
-        detections = periodic
-    else:
-        detections = events.merge(periodic)
+    detections = Observable.empty()
+    if config.run_start_events:
+        detections = detections.merge(events)
+    if config.run_periodic:
+        detections = detections.merge(periodic)
 
     verdicts = detections \
         .where(lambda c: not_on_white_list(c)) \
@@ -76,17 +73,9 @@ def create_app():
         .subscribe_on(NewThreadScheduler()) \
         .subscribe(jurek)
 
-    # if config.cache_params:
-    #     updates_subscription = Observable.from_iterable(docker_helper.get_update_events_observable()) \
-    #         .map(lambda e: e['id']) \
-    #         .retry() \
-    #         .subscribe(CacheInvalidator(docker_helper))
-
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
         subscription.dispose()
-        # if config.cache_params:
-        #     updates_subscription.dispose()
         flask_app.logger.debug("Complete, ready to finish")
         raise KeyboardInterrupt()
 
