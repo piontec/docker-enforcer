@@ -38,8 +38,11 @@ class DockerHelper:
         self.last_check_containers_run_time = datetime.timedelta.min
         self.last_periodic_run_ok = False
 
-    def check_container(self, container_id):
+    def check_container(self, container_id, remove_from_cache=False):
         try:
+            if remove_from_cache:
+                self.remove_from_cache(container_id)
+
             if not self.__config.disable_params:
                 logger.debug("Starting to fetch params for {0}".format(container_id))
                 params = self.get_params(container_id)
@@ -135,12 +138,12 @@ class DockerHelper:
     def remove_from_cache(self, container_id):
         self.__params_cache.pop(container_id, None)
 
-    def __get_events_observable(self, event_type):
+    def get_events_observable(self):
         successful = False
         ev = None
         while not successful:
             try:
-                ev = self.__client.events(filters={"event": event_type}, decode=True)
+                ev = self.__client.events(decode=True)
             except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
                 logger.error("Communication error when subscribing for container events, retrying in 5s: {0}".format(e))
                 time.sleep(5)
@@ -149,12 +152,6 @@ class DockerHelper:
                 time.sleep(5)
             successful = True
         return ev
-
-    def get_start_events_observable(self):
-        return self.__get_events_observable("start")
-
-    def get_update_events_observable(self):
-        return self.__get_events_observable("update")
 
     def kill_container(self, container):
         try:
