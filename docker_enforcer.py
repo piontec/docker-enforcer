@@ -12,7 +12,7 @@ from rx.concurrency import ThreadPoolScheduler, NewThreadScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper
-from dockerenforcer.killer import Killer, Judge, TriggerHandler, CacheInvalidator
+from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 
 from pygments import highlight
@@ -46,29 +46,30 @@ def create_app():
     if not (config.run_start_events or config.run_periodic):
         raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
-    # task_scheduler = NewThreadScheduler()
-    task_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
+    task_scheduler = NewThreadScheduler()
+    # task_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
     if config.run_start_events:
-        start_events = Observable.from_iterable(docker_helper.get_start_events_observable()) \
+        events = Observable.from_iterable(docker_helper.get_events_observable()) \
             .observe_on(scheduler=task_scheduler) \
+            .where(lambda e: is_configured_event(e)) \
             .map(lambda e: e['id']) \
-            .map(lambda cid: docker_helper.check_container(cid))
+            .map(lambda cid: docker_helper.check_container(cid, remove_from_cache=True))
 
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000) \
-            .observe_on(scheduler=NewThreadScheduler()) \
+            .observe_on(scheduler=task_scheduler) \
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
     if not config.run_start_events and not config.run_periodic:
         flask_app.logger.fatal("Either start events or periodic checks need to be enabled")
         raise Exception("No run mode specified. Please set either RUN_START_EVENTS or RUN_PERIODIC")
-    elif config.run_start_events and not config.run_periodic:
-        detections = start_events
-    elif not config.run_start_events and config.run_periodic:
-        detections = periodic
-    else:
-        detections = start_events.merge(periodic)
+
+    detections = Observable.empty()
+    if config.run_start_events:
+        detections = detections.merge(events)
+    if config.run_periodic:
+        detections = detections.merge(periodic)
 
     verdicts = detections \
         .where(lambda c: not_on_white_list(c)) \
@@ -84,21 +85,12 @@ def create_app():
     killer_subs = threaded_verdicts.subscribe(jurek)
     trigger_subs = threaded_verdicts.subscribe(trigger_handler)
 
-    if config.cache_params:
-        updates_subscription = Observable.from_iterable(docker_helper.get_update_events_observable()) \
-            .map(lambda e: e['id']) \
-            .retry() \
-            .subscribe_on(task_scheduler) \
-            .subscribe(CacheInvalidator(docker_helper))
-
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
         killer_subs.dispose()
         trigger_subs.dispose()
-        if config.cache_params:
-            updates_subscription.dispose()
         flask_app.logger.debug("Complete, ready to finish")
-        raise KeyboardInterrupt()
+        quit()
 
     signal.signal(signal.SIGINT, on_exit)
     signal.signal(signal.SIGTERM, on_exit)
@@ -116,6 +108,16 @@ def not_on_white_list(container):
         name = container.params['Name'] if container.params and container.params['Name'] else container.cid
         app.logger.debug("Container {0} is on white list".format(name))
     return not_on_list
+
+
+def is_configured_event(e):
+    if e['Action'] == 'rename' and config.run_rename_events:
+        return True
+    if e['Action'] == 'update' and config.run_update_events:
+        return True
+    if e['Action'] == 'start' and config.run_start_events:
+        return True
+    return False
 
 
 @app.route('/rules')
