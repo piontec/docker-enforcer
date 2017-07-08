@@ -23,7 +23,7 @@ from pygments.formatters.html import HtmlFormatter
 version = "0.5-dev"
 config = Config()
 docker_helper = DockerHelper(config)
-judge = Judge(rules)
+judge = Judge(rules, config.stop_on_first_violation)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
 
@@ -161,6 +161,9 @@ def show_config():
 
 
 def show_filtered_stats(stats_filter):
+    show_all_violated_rules = request.args.get('show_all_violated_rules') == '1'
+    show_image_and_labels = request.args.get('show_image_and_labels') == '1'
+
     data = '{{\n"last_full_check_run_timestamp_start": "{0}",\n' \
            '"last_full_check_run_timestamp_end": "{1}",\n' \
            '"last_full_check_run_time": "{2}",\n' \
@@ -168,7 +171,7 @@ def show_filtered_stats(stats_filter):
                docker_helper.last_check_containers_run_start_timestamp,
                docker_helper.last_check_containers_run_end_timestamp,
                docker_helper.last_check_containers_run_time,
-               jurek.get_stats().to_json_detail_stats(stats_filter))
+               jurek.get_stats().to_json_detail_stats(stats_filter, show_all_violated_rules, show_image_and_labels))
     return to_formatted_json(data)
 
 

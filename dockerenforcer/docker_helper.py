@@ -68,7 +68,8 @@ class DockerHelper:
     def check_containers(self):
         with self.__padlock:
             if self.__check_in_progress:
-                logger.warning("Previous check did not yet complete, consider increasing CHECK_INTERVAL_S")
+                logger.warning("[{0}] Previous check did not yet complete, consider increasing CHECK_INTERVAL_S"
+                               .format(threading.current_thread().name))
                 return
             self.__check_in_progress = True
         logger.debug("Periodic check start: connecting to get the list of containers")
