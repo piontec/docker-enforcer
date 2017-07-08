@@ -56,8 +56,13 @@ def create_app():
             .map(lambda cid: docker_helper.check_container(cid, remove_from_cache=True))
 
     if config.run_periodic:
-        periodic = Observable.interval(config.interval_sec * 1000) \
-            .observe_on(scheduler=task_scheduler) \
+        periodic = Observable.interval(config.interval_sec * 1000)
+
+        if config.immediate_periodical_start:
+            flask_app.logger.debug("Run periodic immediately")
+            periodic = periodic.start_with(-1)
+
+        periodic = periodic.observe_on(scheduler=task_scheduler) \
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
