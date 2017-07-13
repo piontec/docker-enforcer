@@ -1,3 +1,4 @@
+import json
 import threading
 import datetime
 from copy import deepcopy
@@ -12,17 +13,21 @@ logger = logging.getLogger("docker_enforcer")
 
 
 class Stat:
-    def __init__(self, name, reason):
+    def __init__(self, name, reasons, image, labels):
         super().__init__()
         self.counter = 1
         self.last_timestamp = datetime.datetime.utcnow()
         self.name = name
-        self.reason = reason
+        self.reasons = reasons
+        self.image = image
+        self.labels = labels
 
-    def record_new(self, reason):
+    def record_new(self, name, reasons, image, labels):
         self.counter += 1
         self.last_timestamp = datetime.datetime.utcnow()
-        self.reason = reason
+        self.reasosn = reasons
+        self.image = image
+        self.labels = labels
 
     def __str__(self, *args, **kwargs):
         return "{0} - {1}".format(self.counter, self.last_timestamp)
@@ -34,12 +39,15 @@ class StatusDictionary:
         self.__padlock = threading.Lock()
         self.__killed_containers = killed_containers if killed_containers else {}
 
-    def register_killed(self, container, reason):
+    def register_killed(self, container, reasons):
         with self.__padlock:
+            params = container.params
             if container.cid in self.__killed_containers.keys():
-                self.__killed_containers[container.cid].record_new(reason)
+                self.__killed_containers[container.cid].record_new(
+                    params['Name'], reasons, params['Config']['Image'], params['Config']['Labels'])
             else:
-                self.__killed_containers[container.cid] = Stat(container.params['Name'], reason)
+                self.__killed_containers[container.cid] = Stat(
+                    params['Name'], reasons, params['Config']['Image'], params['Config']['Labels'])
 
     def copy(self):
         with self.__padlock:
@@ -54,7 +62,7 @@ containers_stopped_total {0}
 """.format(len(self.__killed_containers))
         return res
 
-    def to_json_detail_stats(self, output_filter):
+    def to_json_detail_stats(self, output_filter, show_all_violated_rules, show_image_and_labels):
         str_list = ""
         with self.__padlock:
             is_first = True
@@ -65,37 +73,56 @@ containers_stopped_total {0}
                     str_list += ",\n"
                 else:
                     is_first = False
-                str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": \"{2}\", " \
-                            "\"count\": {3}, \"last_timestamp\": \"{4}\" }}"\
-                    .format(k, v.name, v.reason, v.counter, v.last_timestamp.isoformat())
+
+                violated_rule = '"%s"' % v.reasons[0]
+                if show_all_violated_rules:
+                    violated_rule = json.dumps(v.reasons)
+
+                str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": {2}, " \
+                            "\"count\": {3}, \"last_timestamp\": \"{4}\""\
+                    .format(k, v.name, violated_rule, v.counter, v.last_timestamp.isoformat())
+
+                if show_image_and_labels:
+                    str_list += ', "image": "{0}", "labels": {1}'.format(v.image, json.dumps(v.labels))
+                str_list += " }"
             return "[\n{0}\n]".format(str_list)
 
+    def get_items(self):
+        return self.__killed_containers.items()
 
 class Verdict:
-    def __init__(self, verdict, container, reason):
+    def __init__(self, verdict, container, reasons):
         super().__init__()
-        self.reason = reason
+        self.reasons = reasons
         self.container = container
         self.verdict = verdict
 
 
 class Judge:
-    def __init__(self, rules):
+    def __init__(self, rules, stop_onf_first_violation):
         super().__init__()
         self.__rules = rules
+        self.__stop_onf_first_violation = stop_onf_first_violation
 
     def should_be_killed(self, container):
         if not container:
             logger.warning("No container details, skipping checks")
             return Verdict(False, container, None)
 
+        reasons = []
         for rule in self.__rules:
             try:
                 if rule['rule'](container):
-                    return Verdict(True, container, rule['name'])
+                    reasons.append(rule['name'])
+                    if self.__stop_onf_first_violation:
+                        break
             except Exception as e:
-                logger.error("During execution of rule {0} exception was raised: {1}".format(rule['name'], e))
-        return Verdict(False, container, None)
+                reasons.append("Exception - rule: {0}, class: {1}, val: {2}"
+                               .format(rule['name'], e.__class__.__name__, str(e)))
+        if len(reasons) > 0:
+            return Verdict(True, container, reasons)
+        else:
+            return Verdict(False, container, None)
 
 
 class Killer(Observer):
@@ -107,9 +134,9 @@ class Killer(Observer):
 
     def on_next(self, verdict):
         logger.info("Container {0} is detected to violate the rule \"{1}\". {2} the container [{3} mode]"
-                    .format(verdict.container, verdict.reason,
+                    .format(verdict.container, json.dumps(verdict.reasons),
                             "Not stopping" if self.__mode == Mode.Warn else "Stopping", self.__mode))
-        self.__status.register_killed(verdict.container, verdict.reason)
+        self.__status.register_killed(verdict.container, verdict.reasons)
         if self.__mode == Mode.Kill:
             self.__manager.kill_container(verdict.container)
 

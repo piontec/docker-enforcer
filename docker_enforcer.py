@@ -23,7 +23,7 @@ from pygments.formatters.html import HtmlFormatter
 version = "0.5-dev"
 config = Config()
 docker_helper = DockerHelper(config)
-judge = Judge(rules)
+judge = Judge(rules, config.stop_on_first_violation)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
 
@@ -56,8 +56,13 @@ def create_app():
             .map(lambda cid: docker_helper.check_container(cid, remove_from_cache=True))
 
     if config.run_periodic:
-        periodic = Observable.interval(config.interval_sec * 1000) \
-            .observe_on(scheduler=task_scheduler) \
+        periodic = Observable.interval(config.interval_sec * 1000)
+
+        if config.immediate_periodical_start:
+            flask_app.logger.debug("Run periodic immediately")
+            periodic = periodic.start_with(-1)
+
+        periodic = periodic.observe_on(scheduler=task_scheduler) \
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
@@ -156,6 +161,9 @@ def show_config():
 
 
 def show_filtered_stats(stats_filter):
+    show_all_violated_rules = request.args.get('show_all_violated_rules') == '1'
+    show_image_and_labels = request.args.get('show_image_and_labels') == '1'
+
     data = '{{\n"last_full_check_run_timestamp_start": "{0}",\n' \
            '"last_full_check_run_timestamp_end": "{1}",\n' \
            '"last_full_check_run_time": "{2}",\n' \
@@ -163,7 +171,7 @@ def show_filtered_stats(stats_filter):
                docker_helper.last_check_containers_run_start_timestamp,
                docker_helper.last_check_containers_run_end_timestamp,
                docker_helper.last_check_containers_run_time,
-               jurek.get_stats().to_json_detail_stats(stats_filter))
+               jurek.get_stats().to_json_detail_stats(stats_filter, show_all_violated_rules, show_image_and_labels))
     return to_formatted_json(data)
 
 
