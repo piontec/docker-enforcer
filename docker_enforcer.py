@@ -20,7 +20,7 @@ from pygments.lexers.data import JsonLexer
 from pygments.lexers.python import Python3Lexer
 from pygments.formatters.html import HtmlFormatter
 
-version = "0.5-dev"
+version = "0.5.0"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules, config.stop_on_first_violation)
