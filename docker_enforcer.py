@@ -3,10 +3,11 @@ import json
 import logging
 import signal
 import sys
+from base64 import b64decode
 from logging import StreamHandler
 
 import multiprocessing
-from flask import Flask, Response, request
+from flask import Flask, Response, request, jsonify
 from rx import Observable
 from rx.concurrency import ThreadPoolScheduler, NewThreadScheduler
 
@@ -180,3 +181,26 @@ def to_formatted_json(data):
         html = highlight(data, JsonLexer(), HtmlFormatter(full=True, linenos='table'))
         return Response(html, content_type="text/html")
     return Response(data, content_type="application/json")
+
+
+@app.route("/Plugin.Activate", methods=['POST'])
+def activate():
+    return to_formatted_json(json.dumps({'Implements': ['authz']}))
+
+
+@app.route("/AuthZPlugin.AuthZRes", methods=['POST'])
+def authz_response():
+    print("AuthZ Response")
+    return to_formatted_json(json.dumps({"Allow": True}))
+
+
+@app.route("/AuthZPlugin.AuthZReq", methods=['POST'])
+def authz_request():
+    print("AuthZ Request")
+    print(request.data)
+    json_data = json.loads(request.data.decode(request.charset))
+    if "RequestBody" in json_data:
+        int_bytes = b64decode(json_data["RequestBody"])
+        int_json = json.loads(int_bytes.decode(request.charset))
+    # print(json_data)
+    return to_formatted_json(json.dumps({"Allow": True}))
