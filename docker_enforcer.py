@@ -10,9 +10,10 @@ import multiprocessing
 from flask import Flask, Response, request, jsonify
 from rx import Observable
 from rx.concurrency import ThreadPoolScheduler, NewThreadScheduler
+from rx.subjects import Subject
 
 from dockerenforcer.config import Config, ConfigEncoder
-from dockerenforcer.docker_helper import DockerHelper
+from dockerenforcer.docker_helper import DockerHelper, Container
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 
@@ -27,6 +28,7 @@ docker_helper = DockerHelper(config)
 judge = Judge(rules, config.stop_on_first_violation)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
+auth_subject = Subject()
 
 
 def create_app():
@@ -72,6 +74,7 @@ def create_app():
         raise Exception("No run mode specified. Please set either RUN_START_EVENTS or RUN_PERIODIC")
 
     detections = Observable.empty()
+    detections = detections.merge(auth_subject)
     if config.run_start_events:
         detections = detections.merge(events)
     if config.run_periodic:
@@ -202,5 +205,7 @@ def authz_request():
     if "RequestBody" in json_data:
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
-    # print(json_data)
+        container = Container("unknown", params=int_json, metrics={}, position=0)
+        auth_subject.on_next(container)
+        print(int_json)
     return to_formatted_json(json.dumps({"Allow": True}))
