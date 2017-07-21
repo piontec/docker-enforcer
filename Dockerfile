@@ -7,4 +7,4 @@ RUN pip install -r requirements-prod.txt
 COPY . /opt/docker_enforcer/
 
 ENTRYPOINT ["gunicorn"]
-CMD ["-w", "4", "--threads", "8", "-b", "0.0.0.0:8888", "--access-logfile", "/var/log/docker_enforcer.log", "--error-logfile", "-", "--log-level", "info", "--timeout", "120", "docker_enforcer:app"]
+CMD ["-w", "1", "--threads", "16", "-b", "0.0.0.0:8888", "--access-logfile", "/var/log/docker_enforcer.log", "--error-logfile", "-", "--log-level", "info", "--timeout", "120", "docker_enforcer:app"]

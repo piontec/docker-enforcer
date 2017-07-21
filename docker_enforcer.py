@@ -14,7 +14,7 @@ from pygments.lexers.python import Python3Lexer
 from rx import Observable
 from rx.concurrency import NewThreadScheduler
 
-from dockerenforcer.config import Config, ConfigEncoder
+from dockerenforcer.config import Config, ConfigEncoder, Mode
 from dockerenforcer.docker_helper import DockerHelper, Container
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
@@ -62,10 +62,6 @@ def create_app():
             .map(lambda _: docker_helper.check_containers()) \
             .flat_map(lambda c: c)
 
-    if not config.run_start_events and not config.run_periodic:
-        flask_app.logger.info("Neither start events or periodic checks are enabled. Docker Enforcer will be working in "
-                              "authz plugin mode only.")
-
     detections = Observable.empty()
     if config.run_start_events:
         detections = detections.merge(events)
@@ -83,13 +79,18 @@ def create_app():
         .publish() \
         .auto_connect(2)
 
-    killer_subs = threaded_verdicts.subscribe(jurek)
-    trigger_subs = threaded_verdicts.subscribe(trigger_handler)
+    if not config.run_start_events and not config.run_periodic:
+        flask_app.logger.info("Neither start events or periodic checks are enabled. Docker Enforcer will be working in "
+                              "authz plugin mode only.")
+    else:
+        killer_subs = threaded_verdicts.subscribe(jurek)
+        trigger_subs = threaded_verdicts.subscribe(trigger_handler)
 
     def on_exit(sig, frame):
         flask_app.logger.info("Stopping docker monitoring")
-        killer_subs.dispose()
-        trigger_subs.dispose()
+        if config.run_start_events or config.run_periodic:
+            killer_subs.dispose()
+            trigger_subs.dispose()
         flask_app.logger.debug("Complete, ready to finish")
         quit()
 
@@ -185,24 +186,37 @@ def activate():
 
 @app.route("/AuthZPlugin.AuthZRes", methods=['POST'])
 def authz_response():
-    print("AuthZ Response")
     return to_formatted_json(json.dumps({"Allow": True}))
 
 
 @app.route("/AuthZPlugin.AuthZReq", methods=['POST'])
 def authz_request():
-    print("AuthZ Request")
-    print(request.data)
+    app.logger.debug("New AuthZ Request: {}".format(request.data))
     json_data = json.loads(request.data.decode(request.charset))
-    if "RequestBody" in json_data:
+    operation = json_data["RequestUri"].split("/")[-1]
+    if operation == "create":
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
         if "Name" not in int_json:
-            int_json["Name"] = "unknown"
+            int_json["Name"] = "<create_request>"
         container = Container(int_json["Name"], params=int_json, metrics={}, position=0)
         if not_on_white_list(container):
             verdict = judge.should_be_killed(container)
             if verdict.verdict:
-                reply = {"Allow": False, "Msg": ", ".join(verdict.reasons)}
-                return to_formatted_json(json.dumps(reply))
+                return process_positive_verdict(verdict, json_data)
     return to_formatted_json(json.dumps({"Allow": True}))
+
+
+def process_positive_verdict(verdict, req):
+    if config.mode == Mode.Warn:
+        app.logger.info("Authorization plugin detected rules violation for operation {} on "
+                        "container {}. Running in WARN mode, so the request is allowed anyway. Broken rules: {}"
+                        .format(req["RequestUri"], verdict.container.params["Name"], ", ".join(verdict.reasons)))
+        reply = {"Allow": True}
+    else:
+        app.logger.info("Authorization plugin denied operation {} on container {} for the following reasons: {}"
+                        .format(req["RequestUri"], verdict.container.params["Name"], ", ".join(verdict.reasons)))
+        reply = {"Allow": False, "Msg": ", ".join(verdict.reasons)}
+
+    jurek.register_kill(verdict)
+    return to_formatted_json(json.dumps(reply))
