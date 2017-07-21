@@ -6,29 +6,25 @@ import sys
 from base64 import b64decode
 from logging import StreamHandler
 
-import multiprocessing
-from flask import Flask, Response, request, jsonify
+from flask import Flask, Response, request
+from pygments import highlight
+from pygments.formatters.html import HtmlFormatter
+from pygments.lexers.data import JsonLexer
+from pygments.lexers.python import Python3Lexer
 from rx import Observable
-from rx.concurrency import ThreadPoolScheduler, NewThreadScheduler
-from rx.subjects import Subject
+from rx.concurrency import NewThreadScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder
 from dockerenforcer.docker_helper import DockerHelper, Container
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 
-from pygments import highlight
-from pygments.lexers.data import JsonLexer
-from pygments.lexers.python import Python3Lexer
-from pygments.formatters.html import HtmlFormatter
-
-version = "0.5-dev"
+version = "0.6-dev"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules, config.stop_on_first_violation)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
-auth_subject = Subject()
 
 
 def create_app():
@@ -44,10 +40,7 @@ def create_app():
     flask_app = Flask(__name__)
     if not flask_app.debug:
         setup_logging()
-
     flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(version, config.docker_socket))
-    if not (config.run_start_events or config.run_periodic):
-        raise ValueError("Either RUN_START_EVENTS or RUN_PERIODIC must be set to True")
 
     task_scheduler = NewThreadScheduler()
     # task_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
@@ -70,11 +63,10 @@ def create_app():
             .flat_map(lambda c: c)
 
     if not config.run_start_events and not config.run_periodic:
-        flask_app.logger.fatal("Either start events or periodic checks need to be enabled")
-        raise Exception("No run mode specified. Please set either RUN_START_EVENTS or RUN_PERIODIC")
+        flask_app.logger.info("Neither start events or periodic checks are enabled. Docker Enforcer will be working in "
+                              "authz plugin mode only.")
 
     detections = Observable.empty()
-    detections = detections.merge(auth_subject)
     if config.run_start_events:
         detections = detections.merge(events)
     if config.run_periodic:
@@ -88,7 +80,7 @@ def create_app():
     threaded_verdicts = verdicts \
         .retry() \
         .subscribe_on(task_scheduler) \
-        .publish()\
+        .publish() \
         .auto_connect(2)
 
     killer_subs = threaded_verdicts.subscribe(jurek)
@@ -172,10 +164,10 @@ def show_filtered_stats(stats_filter):
            '"last_full_check_run_timestamp_end": "{1}",\n' \
            '"last_full_check_run_time": "{2}",\n' \
            '"detections":\n{3}\n}}'.format(
-               docker_helper.last_check_containers_run_start_timestamp,
-               docker_helper.last_check_containers_run_end_timestamp,
-               docker_helper.last_check_containers_run_time,
-               jurek.get_stats().to_json_detail_stats(stats_filter, show_all_violated_rules, show_image_and_labels))
+        docker_helper.last_check_containers_run_start_timestamp,
+        docker_helper.last_check_containers_run_end_timestamp,
+        docker_helper.last_check_containers_run_time,
+        jurek.get_stats().to_json_detail_stats(stats_filter, show_all_violated_rules, show_image_and_labels))
     return to_formatted_json(data)
 
 
@@ -205,7 +197,12 @@ def authz_request():
     if "RequestBody" in json_data:
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
-        container = Container("unknown", params=int_json, metrics={}, position=0)
-        auth_subject.on_next(container)
-        print(int_json)
+        if "Name" not in int_json:
+            int_json["Name"] = "unknown"
+        container = Container(int_json["Name"], params=int_json, metrics={}, position=0)
+        if not_on_white_list(container):
+            verdict = judge.should_be_killed(container)
+            if verdict.verdict:
+                reply = {"Allow": False, "Msg": ", ".join(verdict.reasons)}
+                return to_formatted_json(json.dumps(reply))
     return to_formatted_json(json.dumps({"Allow": True}))
