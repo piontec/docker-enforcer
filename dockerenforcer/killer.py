@@ -41,13 +41,13 @@ class StatusDictionary:
 
     def register_killed(self, container, reasons):
         with self.__padlock:
-            params = container.params
+            name = container.params["Name"]
+            image = container.params["Config"]["Image"] if "Config" in container.params else container.params["Image"]
+            labels = container.params["Config"]["Labels"] if "Config" in container.params else container.params["Labels"]
             if container.cid in self.__killed_containers.keys():
-                self.__killed_containers[container.cid].record_new(
-                    params['Name'], reasons, params['Config']['Image'], params['Config']['Labels'])
+                self.__killed_containers[container.cid].record_new(name, reasons, image, labels)
             else:
-                self.__killed_containers[container.cid] = Stat(
-                    params['Name'], reasons, params['Config']['Image'], params['Config']['Labels'])
+                self.__killed_containers[container.cid] = Stat(name, reasons, image, labels)
 
     def copy(self):
         with self.__padlock:
@@ -137,7 +137,7 @@ class Killer(Observer):
         logger.info("Container {0} is detected to violate the rule \"{1}\". {2} the container [{3} mode]"
                     .format(verdict.container, json.dumps(verdict.reasons),
                             "Not stopping" if self.__mode == Mode.Warn else "Stopping", self.__mode))
-        self.__status.register_killed(verdict.container, verdict.reasons)
+        self.register_kill(verdict)
         if self.__mode == Mode.Kill:
             self.__manager.kill_container(verdict.container)
 
@@ -150,6 +150,9 @@ class Killer(Observer):
 
     def get_stats(self):
         return self.__status.copy()
+
+    def register_kill(self, verdict):
+        self.__status.register_killed(verdict.container, verdict.reasons)
 
 
 class TriggerHandler(Observer):
