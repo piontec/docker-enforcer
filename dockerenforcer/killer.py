@@ -25,7 +25,7 @@ class Stat:
     def record_new(self, name, reasons, image, labels):
         self.counter += 1
         self.last_timestamp = datetime.datetime.utcnow()
-        self.reasosn = reasons
+        self.reasons = reasons
         self.image = image
         self.labels = labels
 
@@ -89,6 +89,7 @@ containers_stopped_total {0}
 
     def get_items(self):
         return self.__killed_containers.items()
+
 
 class Verdict:
     def __init__(self, verdict, container, reasons):
