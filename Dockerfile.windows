@@ -1,0 +1,16 @@
+FROM python:3-windowsservercore
+MAINTAINER Georgy Turevich <georgy.turevich@gmail.com>
+
+COPY requirements*.txt C:/docker_enforcer/
+WORKDIR C:/docker_enforcer/
+RUN pip install -r requirements-win.txt
+COPY . C:/docker_enforcer/
+
+ENV FLASK_APP docker_enforcer.py
+
+SHELL ["powershell"]
+
+# TODO: Looks like Python can not read modules from symbolic links, Copy-Item is a workaround we need
+# to mount  C:\docker_enforcer\rules_mounted during `docker run`
+ENTRYPOINT Copy-Item C:\docker_enforcer\rules_mounted\rules*.py C:\docker_enforcer\rules ; \
+           flask run --host 0.0.0.0 --port 8888 --with-threads;
