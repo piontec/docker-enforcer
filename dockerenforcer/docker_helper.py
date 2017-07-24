@@ -13,9 +13,16 @@ from requests.packages.urllib3.exceptions import ProtocolError
 logger = logging.getLogger("docker_enforcer")
 
 
+class CheckSource:
+    AuthzPlugin = "authz_plugin"
+    Periodic = "periodic"
+    Event = "event"
+
+
 class Container:
-    def __init__(self, cid, params, metrics, position):
+    def __init__(self, cid, params, metrics, position, check_source):
         super().__init__()
+        self.check_source = check_source
         self.position = position
         self.metrics = metrics
         self.params = params
@@ -38,7 +45,7 @@ class DockerHelper:
         self.last_check_containers_run_time = datetime.timedelta.min
         self.last_periodic_run_ok = False
 
-    def check_container(self, container_id, remove_from_cache=False):
+    def check_container(self, container_id, check_source, remove_from_cache=False):
         try:
             if remove_from_cache:
                 self.remove_from_cache(container_id)
@@ -63,9 +70,9 @@ class DockerHelper:
         except Exception as e:
             logger.error("Unexpected error when fetching info about container {0}: {1}".format(container_id, e))
             return None
-        return Container(container_id, params, metrics, 0)
+        return Container(container_id, params, metrics, 0, check_source)
 
-    def check_containers(self):
+    def check_containers(self, check_source):
         with self.__padlock:
             if self.__check_in_progress:
                 logger.warning("[{0}] Previous check did not yet complete, consider increasing CHECK_INTERVAL_S"
@@ -91,7 +98,7 @@ class DockerHelper:
             return
         ids = [container['Id'] for container in containers]
         for container_id in ids:
-            container = self.check_container(container_id)
+            container = self.check_container(container_id, check_source)
             if container is None:
                 continue
             yield container
