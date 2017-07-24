@@ -15,7 +15,7 @@ from rx import Observable
 from rx.concurrency import NewThreadScheduler
 
 from dockerenforcer.config import Config, ConfigEncoder, Mode
-from dockerenforcer.docker_helper import DockerHelper, Container
+from dockerenforcer.docker_helper import DockerHelper, Container, CheckSource
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 
@@ -49,7 +49,7 @@ def create_app():
             .observe_on(scheduler=task_scheduler) \
             .where(lambda e: is_configured_event(e)) \
             .map(lambda e: e['id']) \
-            .map(lambda cid: docker_helper.check_container(cid, remove_from_cache=True))
+            .map(lambda cid: docker_helper.check_container(cid, CheckSource.Event, remove_from_cache=True))
 
     if config.run_periodic:
         periodic = Observable.interval(config.interval_sec * 1000)
@@ -59,7 +59,7 @@ def create_app():
             periodic = periodic.start_with(-1)
 
         periodic = periodic.observe_on(scheduler=task_scheduler) \
-            .map(lambda _: docker_helper.check_containers()) \
+            .map(lambda _: docker_helper.check_containers(CheckSource.Periodic)) \
             .flat_map(lambda c: c)
 
     detections = Observable.empty()
@@ -199,7 +199,8 @@ def authz_request():
         int_json = json.loads(int_bytes.decode(request.charset))
         if "Name" not in int_json:
             int_json["Name"] = "<create_request>"
-        container = Container(int_json["Name"], params=int_json, metrics={}, position=0)
+        container = Container(int_json["Name"], params=int_json, metrics={}, position=0,
+                              check_source=CheckSource.AuthzPlugin)
         if not_on_white_list(container):
             verdict = judge.should_be_killed(container)
             if verdict.verdict:
