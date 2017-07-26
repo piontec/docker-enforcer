@@ -13,6 +13,7 @@ from pygments.lexers.data import JsonLexer
 from pygments.lexers.python import Python3Lexer
 from rx import Observable
 from rx.concurrency import NewThreadScheduler
+from urllib import parse
 
 from dockerenforcer.config import Config, ConfigEncoder, Mode
 from dockerenforcer.docker_helper import DockerHelper, Container, CheckSource
@@ -193,12 +194,13 @@ def authz_response():
 def authz_request():
     app.logger.debug("New AuthZ Request: {}".format(request.data))
     json_data = json.loads(request.data.decode(request.charset))
-    operation = json_data["RequestUri"].split("/")[-1]
-    if operation == "create":
+    url = parse.urlparse(json_data["RequestUri"])
+    operation = url.path.split("/")[-1]
+    if operation == "create" and "RequestBody" in json_data:
+        url_params = parse.parse_qs(url.query)
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
-        if "Name" not in int_json:
-            int_json["Name"] = "<create_request>"
+        int_json["Name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
         container = Container(int_json["Name"], params=int_json, metrics={}, position=0,
                               check_source=CheckSource.AuthzPlugin)
         if not_on_white_list(container):
