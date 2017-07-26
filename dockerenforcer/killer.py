@@ -13,21 +13,23 @@ logger = logging.getLogger("docker_enforcer")
 
 
 class Stat:
-    def __init__(self, name, reasons, image, labels):
+    def __init__(self, name):
         super().__init__()
-        self.counter = 1
-        self.last_timestamp = datetime.datetime.utcnow()
+        self.counter = 0
         self.name = name
-        self.reasons = reasons
-        self.image = image
-        self.labels = labels
+        self.last_timestamp = None
+        self.reasons = None
+        self.image = None
+        self.labels = None
+        self.source = None
 
-    def record_new(self, name, reasons, image, labels):
+    def record_new(self, reasons, image, labels, source):
         self.counter += 1
         self.last_timestamp = datetime.datetime.utcnow()
         self.reasons = reasons
         self.image = image
         self.labels = labels
+        self.source = source
 
     def __str__(self, *args, **kwargs):
         return "{0} - {1}".format(self.counter, self.last_timestamp)
@@ -44,10 +46,8 @@ class StatusDictionary:
             name = container.params["Name"]
             image = container.params["Config"]["Image"] if "Config" in container.params else container.params["Image"]
             labels = container.params["Config"]["Labels"] if "Config" in container.params else container.params["Labels"]
-            if container.cid in self.__killed_containers.keys():
-                self.__killed_containers[container.cid].record_new(name, reasons, image, labels)
-            else:
-                self.__killed_containers[container.cid] = Stat(name, reasons, image, labels)
+            self.__killed_containers.setdefault(container.cid, Stat(name))\
+                .record_new(reasons, image, labels, container.check_source)
 
     def copy(self):
         with self.__padlock:
@@ -79,8 +79,8 @@ containers_stopped_total {0}
                     violated_rule = json.dumps(v.reasons)
 
                 str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": {2}, " \
-                            "\"count\": {3}, \"last_timestamp\": \"{4}\""\
-                    .format(k, v.name, violated_rule, v.counter, v.last_timestamp.isoformat())
+                            "\"source\": \"{3}\", \"count\": {4}, \"last_timestamp\": \"{5}\""\
+                    .format(k, v.name, violated_rule, v.source, v.counter, v.last_timestamp.isoformat())
 
                 if show_image_and_labels:
                     str_list += ', "image": "{0}", "labels": {1}'.format(v.image, json.dumps(v.labels))
