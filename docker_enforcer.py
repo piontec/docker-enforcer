@@ -197,17 +197,23 @@ def authz_request():
     url = parse.urlparse(json_data["RequestUri"])
     operation = url.path.split("/")[-1]
     if operation == "create" and "RequestBody" in json_data:
-        url_params = parse.parse_qs(url.query)
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
-        int_json["Name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
-        container = Container(int_json["Name"], params=int_json, metrics={}, position=0,
-                              check_source=CheckSource.AuthzPlugin)
+        container = make_container_periodic_check_compatible(int_json, url)
         if not_on_white_list(container):
             verdict = judge.should_be_killed(container)
             if verdict.verdict:
                 return process_positive_verdict(verdict, json_data)
     return to_formatted_json(json.dumps({"Allow": True}))
+
+
+def make_container_periodic_check_compatible(cont_json, url):
+    url_params = parse.parse_qs(url.query)
+    cont_json["Name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
+    cont_json["Config"] = {}
+    cont_json["Config"]["Labels"] = cont_json["Labels"]
+    return Container(cont_json["Name"], params=cont_json, metrics={}, position=0,
+                     check_source=CheckSource.AuthzPlugin)
 
 
 def process_positive_verdict(verdict, req):
