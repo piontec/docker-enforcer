@@ -44,7 +44,9 @@ class StatusDictionary:
     def register_killed(self, container, reasons):
         with self.__padlock:
             name = container.params["Name"]
-            image = container.params["Config"]["Image"] if "Config" in container.params else container.params["Image"]
+            image = container.params["Config"]["Image"] \
+                if "Config" in container.params and "Image" in container.params["Config"] \
+                else container.params["Image"]
             labels = container.params["Config"]["Labels"] if "Config" in container.params else container.params["Labels"]
             self.__killed_containers.setdefault(container.cid, Stat(name))\
                 .record_new(reasons, image, labels, container.check_source)
