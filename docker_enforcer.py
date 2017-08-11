@@ -19,11 +19,13 @@ from dockerenforcer.config import Config, ConfigEncoder, Mode
 from dockerenforcer.docker_helper import DockerHelper, Container, CheckSource
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
+from request_rules.request_rules import request_rules
 
 version = "0.6-dev"
 config = Config()
 docker_helper = DockerHelper(config)
-judge = Judge(rules, config.stop_on_first_violation)
+judge = Judge(rules, "container", config.stop_on_first_violation)
+requests_judge = Judge(request_rules, "request", config.stop_on_first_violation)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
 
@@ -193,6 +195,9 @@ def authz_response():
 @app.route("/AuthZPlugin.AuthZReq", methods=['POST'])
 def authz_request():
     app.logger.debug("New AuthZ Request: {}".format(request.data))
+    verdict = requests_judge.should_be_killed(request)
+    if verdict.verdict:
+        return process_positive_verdict(verdict, request)
     json_data = json.loads(request.data.decode(request.charset))
     url = parse.urlparse(json_data["RequestUri"])
     operation = url.path.split("/")[-1]

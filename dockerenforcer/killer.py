@@ -102,20 +102,21 @@ class Verdict:
 
 
 class Judge:
-    def __init__(self, rules, stop_onf_first_violation):
+    def __init__(self, rules, subject_type, stop_onf_first_violation):
         super().__init__()
+        self.__subject_type = subject_type
         self.__rules = rules
         self.__stop_onf_first_violation = stop_onf_first_violation
 
-    def should_be_killed(self, container):
-        if not container:
-            logger.warning("No container details, skipping checks")
-            return Verdict(False, container, None)
+    def should_be_killed(self, subject):
+        if not subject:
+            logger.warning("No {} details, skipping checks".format(self.__subject_type))
+            return Verdict(False, subject, None)
 
         reasons = []
         for rule in self.__rules:
             try:
-                if rule['rule'](container):
+                if rule['rule'](subject):
                     reasons.append(rule['name'])
                     if self.__stop_onf_first_violation:
                         break
@@ -123,9 +124,9 @@ class Judge:
                 reasons.append("Exception - rule: {0}, class: {1}, val: {2}"
                                .format(rule['name'], e.__class__.__name__, str(e)))
         if len(reasons) > 0:
-            return Verdict(True, container, reasons)
+            return Verdict(True, subject, reasons)
         else:
-            return Verdict(False, container, None)
+            return Verdict(False, subject, None)
 
 
 class Killer(Observer):
