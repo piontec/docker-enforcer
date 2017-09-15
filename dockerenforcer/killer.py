@@ -1,8 +1,10 @@
 import json
 import threading
 import datetime
+import re
 from copy import deepcopy
 
+import itertools
 from flask import logging
 from rx import Observer
 
@@ -105,11 +107,11 @@ class Verdict:
 class Judge:
     def __init__(self, rules, config):
         super().__init__()
-        self.__rules = rules
-        self.__config = config
-        self.__global_whitelist = []
-        self.__per_rule_whitelist = {}
-        self.__whitelist_separator = ":"
+        self._rules = rules
+        self._config = config
+        self._global_whitelist = []
+        self._per_rule_whitelist = {}
+        self._whitelist_separator = ":"
         self._load_whitelist_from_config()
 
     @staticmethod
@@ -120,7 +122,7 @@ class Judge:
 
     def _on_global_white_list(self, container):
         has_name, name = self._get_name_info(container)
-        on_list = has_name and container.params['Name'][1:] in self.__global_whitelist
+        on_list = has_name and any(rn.match(container.params['Name'][1:]) for rn in self._global_whitelist)
 
         if on_list:
             logger.debug("Container {0} is on global white list (for all rules)".format(name))
@@ -128,8 +130,8 @@ class Judge:
 
     def _on_per_rule_whitelist(self, container, rule_name):
         has_name, name = self._get_name_info(container)
-        on_list = has_name and rule_name in self.__per_rule_whitelist \
-            and container.params['Name'][1:] in self.__per_rule_whitelist[rule_name]
+        on_list = has_name and rule_name in self._per_rule_whitelist \
+            and any(rn.match(container.params['Name'][1:]) for rn in self._per_rule_whitelist[rule_name])
 
         if on_list:
             logger.debug("Container {0} is on white list for rule '{1}'".format(name, rule_name))
@@ -143,13 +145,13 @@ class Judge:
             return Verdict(False, container, None)
 
         reasons = []
-        for rule in self.__rules:
+        for rule in self._rules:
             if self._on_per_rule_whitelist(container, rule['name']):
                 continue
             try:
                 if rule['rule'](container):
                     reasons.append(rule['name'])
-                    if self.__config.stop_on_first_violation:
+                    if self._config.stop_on_first_violation:
                         break
             except Exception as e:
                 reasons.append("Exception - rule: {0}, class: {1}, val: {2}"
@@ -160,10 +162,15 @@ class Judge:
             return Verdict(False, container, None)
 
     def _load_whitelist_from_config(self):
-        self.__global_whitelist = [r for r in self.__config.white_list if r.find(self.__whitelist_separator) == -1]
-        self.__per_rule_whitelist = {n: r for (r, n) in
-                                     [s.split(self.__whitelist_separator, 1) for s in self.__config.white_list
-                                     if s.find(self.__whitelist_separator) > -1]}
+        self._global_whitelist = [re.compile("^{0}$".format(r)) for r in self._config.white_list
+                                  if r.find(self._whitelist_separator) == -1]
+        per_rule = [s.split(self._whitelist_separator, 1) for s in self._config.white_list
+                    if s.find(self._whitelist_separator) > -1]
+        grouped = itertools.groupby(sorted(per_rule, key=lambda p: p[1]), key=lambda p: p[1])
+        for pair in grouped:
+            rule_name = pair[0]
+            containers_names = [re.compile("^{0}$".format(n[0])) for n in list(pair[1])]
+            self._per_rule_whitelist[rule_name] = containers_names
 
 
 class Killer(Observer):
