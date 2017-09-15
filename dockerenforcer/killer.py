@@ -47,7 +47,8 @@ class StatusDictionary:
             image = container.params["Config"]["Image"] \
                 if "Config" in container.params and "Image" in container.params["Config"] \
                 else container.params["Image"]
-            labels = container.params["Config"]["Labels"] if "Config" in container.params else container.params["Labels"]
+            labels = container.params["Config"]["Labels"] if "Config" in container.params \
+                else container.params["Labels"]
             self.__killed_containers.setdefault(container.cid, Stat(name))\
                 .record_new(reasons, image, labels, container.check_source)
 
@@ -111,22 +112,26 @@ class Judge:
         self.__whitelist_separator = ":"
         self._load_whitelist_from_config()
 
-    def _on_global_white_list(self, container):
+    @staticmethod
+    def _get_name_info(container):
         has_name = container.params and 'Name' in container.params
+        name = container.params['Name'][1:] if has_name else container.cid
+        return has_name, name
+
+    def _on_global_white_list(self, container):
+        has_name, name = self._get_name_info(container)
         on_list = has_name and container.params['Name'][1:] in self.__global_whitelist
 
         if on_list:
-            name = container.params['Name'][1:] if has_name else container.cid
-            logger.debug("Container {0} is on white list".format(name))
+            logger.debug("Container {0} is on global white list (for all rules)".format(name))
         return on_list
 
     def _on_per_rule_whitelist(self, container, rule_name):
-        has_name = container.params and 'Name' in container.params
+        has_name, name = self._get_name_info(container)
         on_list = has_name and rule_name in self.__per_rule_whitelist \
             and container.params['Name'][1:] in self.__per_rule_whitelist[rule_name]
 
         if on_list:
-            name = container.params['Name'][1:] if has_name else container.cid
             logger.debug("Container {0} is on white list for rule '{1}'".format(name, rule_name))
         return on_list
 
