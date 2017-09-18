@@ -104,7 +104,11 @@ The following options are supported (values after '=' below are the defaults):
 - "DISABLE_METRICS=False" - disable container's metrics fetching; this decreases the number of requests made to the docker daemon (metrics fetching is quite heavy), but you can't use any rules that refer to `c.metrics` property
 - "IMMEDIATE_PERIODICAL_START=False" - normally, when the enforcer is started in Periodic mode, it waits CHECK_INTERVAL_S seconds and just then starts the first check; if you want the check to start immediately after daemon startup - set this to True,
 - "STOP_ON_FIRST_VIOLATION=True" - normally, docker enforcer stops checking validation rules after it finds the first matching rules - this allows for a better performance; still, if you want to keep checking all the rules and have all the violations, not only the first one, logged - set this to True,
-- "WHITE_LIST=docker-enforcer docker_enforcer" - comma separated white list of container names; containers on the won't be stopped even if they break the rules
+- "WHITE_LIST=docker-enforcer,docker.*,docker-enforcer:steal socket, docker*:steal socket" - comma separated list of white list definitions, where each definition can be:
+  - container name, like "docker-enforcer": this makes container named exactly "docker-enforcer" to be excluded from checks of all rules
+  - container name regexp, like "docker.*": this makes any container which name matches regex "docker.*" to be excluded from checks of all rules
+  - container and rule name, like "docker-enforcer:steal socket": this makes container named exactly "docker-enforcer" to be excluded from checking against the rule named "steal socket"
+  - container name regexp and rule name, like "docker.*:steal socket": this makes any container which name matches regex "docker.*" to be excluded from checking against the rule named "steal socket"
  
 ### Accessing data about running docker enforcer container
 Docker enforcer exposes a simple HTTP API on the port 8888. If the "Accept:" header in client's request includes HTML, a human-friendly JSON will be returned. Otherwise, plain text JSON is sent in response.  This currently includes the following endpoints:
@@ -118,5 +122,3 @@ Additionally, for `/` and `/recent` endpoints, you can append the following opti
 - show_all_violated_rules=1 - if STOP_ON_FIRST_VIOLATION is set to False, then enabling this option will show all violated rules; normally only the first one is reported,
 - show_image_and_labels=1 - for any detected violation, show additionally image name used to start the container and all of its labels.
 
-# TODO
-- triggers

@@ -1,4 +1,5 @@
 import unittest
+from dockerenforcer.config import Config
 from .test_helpers import RulesTestHelper
 
 
@@ -33,7 +34,7 @@ class ParamsRulesTests(TestsWithVerdicts):
     def test_must_have_cpu_quota(self):
         rules = [{"name": "must have CPU limit",
                   "rule": lambda c: c.params['HostConfig']['CpuQuota'] == 0
-                          and c.params['HostConfig']['CpuPeriod'] == 0}]
+                  and c.params['HostConfig']['CpuPeriod'] == 0}]
         self.assertFalse(RulesTestHelper(rules, cpu_period=50000, cpu_quota=50000).get_verdicts()[0].verdict)
         self.assertTrue(RulesTestHelper(rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
 
@@ -43,3 +44,34 @@ class MetricsRulesTests(TestsWithVerdicts):
         rules = [{"name": "uses over 1GB of RAM", "rule": lambda c: c.metrics['memory_stats']['usage'] > 1 * 1024 ** 3}]
         self.assertFalse(RulesTestHelper(rules, mem_usage=1024 ** 2).get_verdicts()[0].verdict)
         self.assertTrue(RulesTestHelper(rules, mem_usage=10 * 1024 ** 3).get_verdicts()[0].verdict)
+
+
+class WhitelistTests(TestsWithVerdicts):
+    def setUp(self):
+        self.wl_config = Config()
+        self.rules = [{"name": "must have CPU limit",
+                       "rule": lambda c: c.params['HostConfig']['CpuQuota'] == 0
+                       and c.params['HostConfig']['CpuPeriod'] == 0}]
+
+    def test_killed_without_whitelist(self):
+        self.assertTrue(RulesTestHelper(self.rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
+
+    def test_not_killed_on_whitelist_full_name(self):
+        self.wl_config.white_list = ["testing_vro"]
+        self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
+                         .get_verdicts()[0].verdict)
+
+    def test_not_killed_on_whitelist_name_regex(self):
+        self.wl_config.white_list = ["testing_.*"]
+        self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
+                         .get_verdicts()[0].verdict)
+
+    def test_not_killed_on_whitelist_full_name_and_rule(self):
+        self.wl_config.white_list = ["testing_vro:must have CPU limit"]
+        self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
+                         .get_verdicts()[0].verdict)
+
+    def test_not_killed_on_whitelist_name_regex_and_rule(self):
+        self.wl_config.white_list = ["testing.*:must have CPU limit"]
+        self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
+                         .get_verdicts()[0].verdict)
