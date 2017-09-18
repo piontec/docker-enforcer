@@ -1,7 +1,5 @@
-import unittest
-
 from dockerenforcer.config import Config
-from dockerenforcer.docker_helper import Container
+from dockerenforcer.docker_helper import Container, CheckSource
 from dockerenforcer.killer import Judge
 
 
@@ -96,7 +94,7 @@ class RulesTestHelper:
                          'tx_bytes': 578, 'rx_packets': 80, 'tx_errors': 0}}, 'read': '2016-10-27T19:30:13.751688232Z'}
         self.containers = []
         for cnt in range(container_count):
-            self.containers.append(Container(cid, params, metrics, cnt))
+            self.containers.append(Container(cid, params, metrics, cnt, check_source=CheckSource.Event))
 
     def get_verdicts(self):
         return list(map(lambda c: self.judge.should_be_killed(c), self.containers))

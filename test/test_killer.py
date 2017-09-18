@@ -1,5 +1,5 @@
 import unittest
-from test.test_helpers import RulesTestHelper
+from .test_helpers import RulesTestHelper
 
 
 class TestsWithVerdicts(unittest.TestCase):

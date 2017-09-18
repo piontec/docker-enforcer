@@ -2,7 +2,8 @@ from enum import Enum
 from json import JSONEncoder
 import os
 import copy
-import docker_enforcer
+
+version = "0.6-dev"
 
 
 class Mode(Enum):
@@ -29,6 +30,7 @@ class Config:
         self.run_periodic = bool(os.getenv('RUN_PERIODIC', 'True') == 'True')
         self.immediate_periodical_start = bool(os.getenv('IMMEDIATE_PERIODICAL_START', 'False') == 'True')
         self.stop_on_first_violation = bool(os.getenv('STOP_ON_FIRST_VIOLATION', 'True') == 'True')
+        self.version = version
 
 
 class ConfigEncoder(JSONEncoder):
@@ -36,5 +38,5 @@ class ConfigEncoder(JSONEncoder):
         out_dict = copy.deepcopy(o).__dict__
         mode = out_dict.pop("mode")
         out_dict["mode"] = mode.__str__()
-        out_dict["version"] = docker_enforcer.version
+        out_dict["version"] = version
         return out_dict

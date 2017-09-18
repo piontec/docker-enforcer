@@ -8,7 +8,7 @@ import itertools
 from flask import logging
 from rx import Observer
 
-from dockerenforcer.config import Mode
+from .config import Mode
 from triggers.triggers import triggers
 
 logger = logging.getLogger("docker_enforcer")

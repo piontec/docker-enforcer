@@ -20,7 +20,6 @@ from dockerenforcer.docker_helper import DockerHelper, Container, CheckSource
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 
-version = "0.6-dev"
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules, config)
@@ -41,7 +40,8 @@ def create_app():
     flask_app = Flask(__name__)
     if not flask_app.debug:
         setup_logging()
-    flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(version, config.docker_socket))
+    flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(config.version,
+                                                                                        config.docker_socket))
 
     task_scheduler = NewThreadScheduler()
     # task_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
