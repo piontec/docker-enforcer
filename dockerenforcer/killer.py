@@ -1,12 +1,14 @@
 import json
 import threading
 import datetime
+import re
 from copy import deepcopy
 
+import itertools
 from flask import logging
 from rx import Observer
 
-from dockerenforcer.config import Mode
+from .config import Mode
 from triggers.triggers import triggers
 
 logger = logging.getLogger("docker_enforcer")
@@ -47,7 +49,8 @@ class StatusDictionary:
             image = container.params["Config"]["Image"] \
                 if "Config" in container.params and "Image" in container.params["Config"] \
                 else container.params["Image"]
-            labels = container.params["Config"]["Labels"] if "Config" in container.params else container.params["Labels"]
+            labels = container.params["Config"]["Labels"] if "Config" in container.params \
+                else container.params["Labels"]
             self.__killed_containers.setdefault(container.cid, Stat(name))\
                 .record_new(reasons, image, labels, container.check_source)
 
@@ -102,22 +105,53 @@ class Verdict:
 
 
 class Judge:
-    def __init__(self, rules, stop_onf_first_violation):
+    def __init__(self, rules, config):
         super().__init__()
-        self.__rules = rules
-        self.__stop_onf_first_violation = stop_onf_first_violation
+        self._rules = rules
+        self._config = config
+        self._global_whitelist = []
+        self._per_rule_whitelist = {}
+        self._whitelist_separator = ":"
+        self._load_whitelist_from_config()
+
+    @staticmethod
+    def _get_name_info(container):
+        has_name = container.params and 'Name' in container.params
+        name = container.params['Name'][1:] if has_name else container.cid
+        return has_name, name
+
+    def _on_global_white_list(self, container):
+        has_name, name = self._get_name_info(container)
+        on_list = has_name and any(rn.match(container.params['Name'][1:]) for rn in self._global_whitelist)
+
+        if on_list:
+            logger.debug("Container {0} is on global white list (for all rules)".format(name))
+        return on_list
+
+    def _on_per_rule_whitelist(self, container, rule_name):
+        has_name, name = self._get_name_info(container)
+        on_list = has_name and rule_name in self._per_rule_whitelist \
+            and any(rn.match(container.params['Name'][1:]) for rn in self._per_rule_whitelist[rule_name])
+
+        if on_list:
+            logger.debug("Container {0} is on white list for rule '{1}'".format(name, rule_name))
+        return on_list
 
     def should_be_killed(self, container):
         if not container:
             logger.warning("No container details, skipping checks")
             return Verdict(False, container, None)
+        if self._on_global_white_list(container):
+            return Verdict(False, container, None)
 
         reasons = []
-        for rule in self.__rules:
+        for rule in self._rules:
+            if self._on_per_rule_whitelist(container, rule['name']):
+                continue
             try:
                 if rule['rule'](container):
                     reasons.append(rule['name'])
-                    if self.__stop_onf_first_violation:
+                    if self._config.stop_on_first_violation:
                         break
             except Exception as e:
                 reasons.append("Exception - rule: {0}, class: {1}, val: {2}"
@@ -126,6 +160,17 @@ class Judge:
             return Verdict(True, container, reasons)
         else:
             return Verdict(False, container, None)
+
+    def _load_whitelist_from_config(self):
+        self._global_whitelist = [re.compile("^{0}$".format(r)) for r in self._config.white_list
+                                  if r.find(self._whitelist_separator) == -1]
+        per_rule = [s.split(self._whitelist_separator, 1) for s in self._config.white_list
+                    if s.find(self._whitelist_separator) > -1]
+        grouped = itertools.groupby(sorted(per_rule, key=lambda p: p[1]), key=lambda p: p[1])
+        for pair in grouped:
+            rule_name = pair[0]
+            containers_names = [re.compile("^{0}$".format(n[0])) for n in list(pair[1])]
+            self._per_rule_whitelist[rule_name] = containers_names
 
 
 class Killer(Observer):

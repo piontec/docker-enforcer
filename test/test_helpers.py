@@ -1,12 +1,12 @@
-import unittest
-
-from dockerenforcer.docker_helper import Container
+from dockerenforcer.config import Config
+from dockerenforcer.docker_helper import Container, CheckSource
 from dockerenforcer.killer import Judge
 
 
 class RulesTestHelper:
-    def __init__(self, rules, container_count=1, mem_limit=0, cpu_share=0, cpu_period=0, cpu_quota=0, mem_usage=0):
-        self.judge = Judge(rules)
+    def __init__(self, rules, config=Config(), container_count=1, mem_limit=0, cpu_share=0, cpu_period=0, cpu_quota=0,
+                 mem_usage=0):
+        self.judge = Judge(rules, config)
         cid = '7de82a4e90f1bd4fd022bcce298e7277b8aec009e222892e44769d6c636b8205'
         params = {'Image': 'sha256:47bcc53f74dc94b1920f0b34f6036096526296767650f223433fe65c35f149eb',
                   'HostConfig': {'Isolation': '', 'IOMaximumBandwidth': 0, 'CpuPercent': 0, 'ReadonlyRootfs': False,
@@ -94,7 +94,7 @@ class RulesTestHelper:
                          'tx_bytes': 578, 'rx_packets': 80, 'tx_errors': 0}}, 'read': '2016-10-27T19:30:13.751688232Z'}
         self.containers = []
         for cnt in range(container_count):
-            self.containers.append(Container(cid, params, metrics, cnt))
+            self.containers.append(Container(cid, params, metrics, cnt, check_source=CheckSource.Event))
 
     def get_verdicts(self):
         return list(map(lambda c: self.judge.should_be_killed(c), self.containers))

@@ -20,10 +20,9 @@ from dockerenforcer.docker_helper import DockerHelper, Container, CheckSource
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 
-version = "0.6-dev"
 config = Config()
 docker_helper = DockerHelper(config)
-judge = Judge(rules, config.stop_on_first_violation)
+judge = Judge(rules, config)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
 
@@ -41,7 +40,8 @@ def create_app():
     flask_app = Flask(__name__)
     if not flask_app.debug:
         setup_logging()
-    flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(version, config.docker_socket))
+    flask_app.logger.info("Starting docker-enforcer v{0} with docker socket {1}".format(config.version,
+                                                                                        config.docker_socket))
 
     task_scheduler = NewThreadScheduler()
     # task_scheduler = ThreadPoolScheduler(multiprocessing.cpu_count())
@@ -70,7 +70,6 @@ def create_app():
         detections = detections.merge(periodic)
 
     verdicts = detections \
-        .where(lambda c: not_on_white_list(c)) \
         .map(lambda container: judge.should_be_killed(container)) \
         .where(lambda v: v.verdict)
 
@@ -102,15 +101,6 @@ def create_app():
 
 
 app = create_app()
-
-
-def not_on_white_list(container):
-    not_on_list = container.params and container.params['Name'] \
-                  and container.params['Name'][1:] not in config.white_list
-    if not not_on_list:
-        name = container.params['Name'] if container.params and container.params['Name'] else container.cid
-        app.logger.debug("Container {0} is on white list".format(name))
-    return not_on_list
 
 
 def is_configured_event(e):
@@ -200,10 +190,9 @@ def authz_request():
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
         container = make_container_periodic_check_compatible(int_json, url)
-        if not_on_white_list(container):
-            verdict = judge.should_be_killed(container)
-            if verdict.verdict:
-                return process_positive_verdict(verdict, json_data)
+        verdict = judge.should_be_killed(container)
+        if verdict.verdict:
+            return process_positive_verdict(verdict, json_data)
     return to_formatted_json(json.dumps({"Allow": True}))
 
 
