@@ -1,9 +1,17 @@
 # docker enforcer
 
-## What for?
+## Why?
 Docker enforcer audits containers running on a shared docker host. The aim of docker enforcer is to stop containers running on a single host, but not obeying rules configured by the host's administrator. These rules may restrict values used as container's parameters or values reported by container's performance metrics.
- 
-## How?
+
+## Index
+* [How - Running and Configuring](#how-running-and-confguring)
+  * [Preapring rules file](#preparing-rules-file)
+  * [Running enforcer as a container](#running-enforcer-as-a-container)
+  * [Run modes](#run-modes)
+  * [Configuration options](#configuration-options)
+* [Accessing data about running docker enforcer container](#accessing-data-about-running-docker-enforcer-container)
+
+## How - Running and Configuring
 It's the easiest to run docker enforcer as a container. Before starting, pay attention to a few facts:
 - Docker enforcer needs to be run as a privileged container and needs access to the docker socket.
 - To keep the rule expressions as elastic as possible, they are directly stored as python code. This is a security risk, as any python code put into the rules file will be executed in a privileged container with access to the docker socket. Make sure that you rules file has restricted access and can be modified only by the root user.
@@ -80,16 +88,16 @@ docker run -d --name docker_enforcer -p 8888:8888 --privileged -v /rules_dir:/op
 ```
 After the successful run, a simple web API will be exposed to show current rules and status (see below). You can access `http://localhost:8888/rules` to see the list of rules configured. This should be in sync with the rules file you passed to the container.
 
-#### Run modes
+### Run modes
 Currently, Docker Enforcer supports two different run modes. They can be used together, but at least one fo them must be enabled. The supported modes are:
 
-##### Periodic mode
+#### Periodic mode
 In this mode, Docker Enforcer has a configured time period. When it passes, the enforcer connects to docker daemon, fetches the list of all currently running containers and then runs all the rules against every container on the list. 
 
-##### Events mode
+#### Events mode
 In this mode, Docker Enforcer listens for container lifetime events from the docker daemon. Each time you run or modify your container, you pass it a set of configuration options. This situation is also reported by docker daemon for anyone willing to act on it. Docker enforcer listens for these events and then runs all rules against the single container related to the event signalled by the docker daemon.
 
-#### Configuration options
+### Configuration options
 All the configuration options are loaded from environment variables, which makes them pretty easy to configure when running as docker container (by passing to docker with `-e KEY=VAL` added to the run command above).
 The following options are supported (values after '=' below are the defaults):
 - "RUN_PERIODIC=True" - enables Periodic run mode,
@@ -110,7 +118,7 @@ The following options are supported (values after '=' below are the defaults):
   - container and rule name, like "docker-enforcer:steal socket": this makes container named exactly "docker-enforcer" to be excluded from checking against the rule named "steal socket"
   - container name regexp and rule name, like "docker.*:steal socket": this makes any container which name matches regex "docker.*" to be excluded from checking against the rule named "steal socket"
  
-### Accessing data about running docker enforcer container
+## Accessing data about running docker enforcer container
 Docker enforcer exposes a simple HTTP API on the port 8888. If the "Accept:" header in client's request includes HTML, a human-friendly JSON will be returned. Otherwise, plain text JSON is sent in response.  This currently includes the following endpoints:
 - `/` - shows statistics about containers stopped by docker enforcer; shows all detections since starting the service
 - `/recent` - shows statistics about containers stopped by docker enforcer in the most recent periodic run; makes sense only when "RUN_PERIODIC" is True
