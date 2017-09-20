@@ -24,7 +24,7 @@ from request_rules.request_rules import request_rules
 config = Config()
 docker_helper = DockerHelper(config)
 judge = Judge(rules, "container", config)
-requests_judge = Judge(request_rules, "request", config)
+requests_judge = Judge(request_rules, "request", config, run_whitelists=False)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
 
