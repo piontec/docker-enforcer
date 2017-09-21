@@ -1,5 +1,8 @@
 import json
 import unittest
+
+import re
+
 from docker_enforcer import app, judge, config, requests_judge
 from dockerenforcer.config import Mode
 from test.test_helpers import ApiTestHelper
@@ -7,8 +10,9 @@ from test.test_helpers import ApiTestHelper
 
 class ApiRequestFilterTest(unittest.TestCase):
     mem_rule = {"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] == 0}
-    cp_request_rule = {"name": "cp not allowed", "rule": lambda r: r['RequestMethod'] == 'GET'
-        and r['ParsedUri'].path.startswith('/v1.30/containers/test/archive')}
+    cp_request_rule_regexp = re.compile("^/v1\.30/containers/test/archive$")
+    cp_request_rule = {"name": "cp not allowed", "rule": lambda r, x=cp_request_rule_regexp: r['RequestMethod'] == 'GET'
+        and x.match(r['ParsedUri'].path)}
 
     def setUp(self):
         config.mode = Mode.Kill
