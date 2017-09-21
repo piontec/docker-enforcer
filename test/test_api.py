@@ -10,9 +10,9 @@ from test.test_helpers import ApiTestHelper
 
 class ApiRequestFilterTest(unittest.TestCase):
     mem_rule = {"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] == 0}
-    cp_request_rule_regexp = re.compile("^/v1\.30/containers/test/archive$")
-    cp_request_rule = {"name": "cp not allowed", "rule": lambda r, x=cp_request_rule_regexp: r['RequestMethod'] == 'GET'
-        and x.match(r['ParsedUri'].path)}
+    cp_request_rule_regexp = re.compile("^/v1\.[23]\d/containers/test/archive$")
+    cp_request_rule = {"name": "cp not allowed", "rule": lambda r, x=cp_request_rule_regexp:
+        r['RequestMethod'] in ['GET', 'HEAD'] and x.match(r['ParsedUri'].path)}
 
     def setUp(self):
         config.mode = Mode.Kill
@@ -40,4 +40,9 @@ class ApiRequestFilterTest(unittest.TestCase):
     def test_request_rule_no_cp_from(self):
         requests_judge._rules = [self.cp_request_rule]
         res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_copy_from_cont)
+        self._check_response(res, False, "cp not allowed")
+
+    def test_request_rule_no_cp_to(self):
+        requests_judge._rules = [self.cp_request_rule]
+        res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_copy_to_cont)
         self._check_response(res, False, "cp not allowed")
