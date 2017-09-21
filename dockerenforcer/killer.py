@@ -207,10 +207,10 @@ class Killer(Observer):
 class TriggerHandler(Observer):
     def __init__(self):
         super().__init__()
-        self.__triggers = triggers
+        self._triggers = triggers
 
     def on_next(self, verdict):
-        for trigger in self.__triggers:
+        for trigger in self._triggers:
             try:
                 trigger["trigger"](verdict)
             except Exception as e:

@@ -224,6 +224,7 @@ def process_positive_verdict(verdict, req, register=True):
                         .format(req["RequestUri"], enhanced_info, ", ".join(verdict.reasons)))
         reply = {"Allow": False, "Msg": ", ".join(verdict.reasons)}
 
+    trigger_handler.on_next(verdict)
     if register:
         jurek.register_kill(verdict)
     return to_formatted_json(json.dumps(reply))
