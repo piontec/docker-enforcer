@@ -185,11 +185,12 @@ def authz_response():
 @app.route("/AuthZPlugin.AuthZReq", methods=['POST'])
 def authz_request():
     app.logger.debug("New AuthZ Request: {}".format(request.data))
-    verdict = requests_judge.should_be_killed(request)
-    if verdict.verdict:
-        return process_positive_verdict(verdict, request)
     json_data = json.loads(request.data.decode(request.charset))
     url = parse.urlparse(json_data["RequestUri"])
+    json_data["ParsedUri"] = url
+    verdict = requests_judge.should_be_killed(json_data)
+    if verdict.verdict:
+        return process_positive_verdict(verdict, json_data, register=False)
     operation = url.path.split("/")[-1]
     if operation == "create" and "RequestBody" in json_data:
         int_bytes = b64decode(json_data["RequestBody"])
@@ -210,16 +211,19 @@ def make_container_periodic_check_compatible(cont_json, url):
                      check_source=CheckSource.AuthzPlugin)
 
 
-def process_positive_verdict(verdict, req):
+def process_positive_verdict(verdict, req, register=True):
+    enhanced_info = "." if "params" not in verdict.container else " on container {}.".format(
+        verdict.container.params["Name"])
     if config.mode == Mode.Warn:
-        app.logger.info("Authorization plugin detected rules violation for operation {} on "
-                        "container {}. Running in WARN mode, so the request is allowed anyway. Broken rules: {}"
-                        .format(req["RequestUri"], verdict.container.params["Name"], ", ".join(verdict.reasons)))
+        app.logger.info("Authorization plugin detected rules violation for operation {}{}"
+                        "Running in WARN mode, so the request is allowed anyway. Broken rules: {}"
+                        .format(req["RequestUri"], enhanced_info, ", ".join(verdict.reasons)))
         reply = {"Allow": True}
     else:
-        app.logger.info("Authorization plugin denied operation {} on container {} for the following reasons: {}"
-                        .format(req["RequestUri"], verdict.container.params["Name"], ", ".join(verdict.reasons)))
+        app.logger.info("Authorization plugin denied operation {}{} Broken rules: {}"
+                        .format(req["RequestUri"], enhanced_info, ", ".join(verdict.reasons)))
         reply = {"Allow": False, "Msg": ", ".join(verdict.reasons)}
 
-    jurek.register_kill(verdict)
+    if register:
+        jurek.register_kill(verdict)
     return to_formatted_json(json.dumps(reply))
