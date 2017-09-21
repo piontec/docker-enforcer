@@ -40,38 +40,38 @@ class Stat:
 class StatusDictionary:
     def __init__(self, killed_containers=None):
         super().__init__()
-        self.__padlock = threading.Lock()
-        self.__killed_containers = killed_containers if killed_containers else {}
+        self._padlock = threading.Lock()
+        self._killed_containers = killed_containers if killed_containers else {}
 
     def register_killed(self, container, reasons):
-        with self.__padlock:
+        with self._padlock:
             name = container.params["Name"]
             image = container.params["Config"]["Image"] \
                 if "Config" in container.params and "Image" in container.params["Config"] \
                 else container.params["Image"]
             labels = container.params["Config"]["Labels"] if "Config" in container.params \
                 else container.params["Labels"]
-            self.__killed_containers.setdefault(container.cid, Stat(name))\
+            self._killed_containers.setdefault(container.cid, Stat(name))\
                 .record_new(reasons, image, labels, container.check_source)
 
     def copy(self):
-        with self.__padlock:
-            res = StatusDictionary(deepcopy(self.__killed_containers))
+        with self._padlock:
+            res = StatusDictionary(deepcopy(self._killed_containers))
         return res
 
     def to_prometheus_stats_format(self):
-        with self.__padlock:
+        with self._padlock:
             res = """# HELP containers_stopped_total The total number of docker containers stopped.
 # TYPE containers_stopped_total counter
 containers_stopped_total {0}
-""".format(len(self.__killed_containers))
+""".format(len(self._killed_containers))
         return res
 
     def to_json_detail_stats(self, output_filter, show_all_violated_rules, show_image_and_labels):
         str_list = ""
-        with self.__padlock:
+        with self._padlock:
             is_first = True
-            for k, v in self.__killed_containers.items():
+            for k, v in self._killed_containers.items():
                 if not output_filter(v):
                     continue
                 if not is_first:
@@ -93,7 +93,7 @@ containers_stopped_total {0}
             return "[\n{0}\n]".format(str_list)
 
     def get_items(self):
-        return self.__killed_containers.items()
+        return self._killed_containers.items()
 
 
 class Verdict:
@@ -178,17 +178,17 @@ class Judge:
 class Killer(Observer):
     def __init__(self, manager, mode):
         super().__init__()
-        self.__mode = mode
-        self.__manager = manager
-        self.__status = StatusDictionary()
+        self._mode = mode
+        self._manager = manager
+        self._status = StatusDictionary()
 
     def on_next(self, verdict):
         logger.info("Container {0} is detected to violate the rule \"{1}\". {2} the container [{3} mode]"
                     .format(verdict.container, json.dumps(verdict.reasons),
-                            "Not stopping" if self.__mode == Mode.Warn else "Stopping", self.__mode))
+                            "Not stopping" if self._mode == Mode.Warn else "Stopping", self._mode))
         self.register_kill(verdict)
-        if self.__mode == Mode.Kill:
-            self.__manager.kill_container(verdict.container)
+        if self._mode == Mode.Kill:
+            self._manager.kill_container(verdict.container)
 
     def on_error(self, e):
         logger.warning("An error occurred while trying to check running containers")
@@ -198,10 +198,10 @@ class Killer(Observer):
         logger.error("This should never happen. Please contact the dev")
 
     def get_stats(self):
-        return self.__status.copy()
+        return self._status.copy()
 
     def register_kill(self, verdict):
-        self.__status.register_killed(verdict.container, verdict.reasons)
+        self._status.register_killed(verdict.container, verdict.reasons)
 
 
 class TriggerHandler(Observer):
