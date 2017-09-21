@@ -40,38 +40,38 @@ class Stat:
 class StatusDictionary:
     def __init__(self, killed_containers=None):
         super().__init__()
-        self.__padlock = threading.Lock()
-        self.__killed_containers = killed_containers if killed_containers else {}
+        self._padlock = threading.Lock()
+        self._killed_containers = killed_containers if killed_containers else {}
 
     def register_killed(self, container, reasons):
-        with self.__padlock:
+        with self._padlock:
             name = container.params["Name"]
             image = container.params["Config"]["Image"] \
                 if "Config" in container.params and "Image" in container.params["Config"] \
                 else container.params["Image"]
             labels = container.params["Config"]["Labels"] if "Config" in container.params \
                 else container.params["Labels"]
-            self.__killed_containers.setdefault(container.cid, Stat(name))\
+            self._killed_containers.setdefault(container.cid, Stat(name))\
                 .record_new(reasons, image, labels, container.check_source)
 
     def copy(self):
-        with self.__padlock:
-            res = StatusDictionary(deepcopy(self.__killed_containers))
+        with self._padlock:
+            res = StatusDictionary(deepcopy(self._killed_containers))
         return res
 
     def to_prometheus_stats_format(self):
-        with self.__padlock:
+        with self._padlock:
             res = """# HELP containers_stopped_total The total number of docker containers stopped.
 # TYPE containers_stopped_total counter
 containers_stopped_total {0}
-""".format(len(self.__killed_containers))
+""".format(len(self._killed_containers))
         return res
 
     def to_json_detail_stats(self, output_filter, show_all_violated_rules, show_image_and_labels):
         str_list = ""
-        with self.__padlock:
+        with self._padlock:
             is_first = True
-            for k, v in self.__killed_containers.items():
+            for k, v in self._killed_containers.items():
                 if not output_filter(v):
                     continue
                 if not is_first:
@@ -93,20 +93,22 @@ containers_stopped_total {0}
             return "[\n{0}\n]".format(str_list)
 
     def get_items(self):
-        return self.__killed_containers.items()
+        return self._killed_containers.items()
 
 
 class Verdict:
     def __init__(self, verdict, container, reasons):
         super().__init__()
         self.reasons = reasons
-        self.container = container
+        self.subject = container
         self.verdict = verdict
 
 
 class Judge:
-    def __init__(self, rules, config):
+    def __init__(self, rules, subject_type, config, run_whitelists=True):
         super().__init__()
+        self._run_whitelists = run_whitelists
+        self._subject_type = subject_type
         self._rules = rules
         self._config = config
         self._global_whitelist = []
@@ -137,19 +139,19 @@ class Judge:
             logger.debug("Container {0} is on white list for rule '{1}'".format(name, rule_name))
         return on_list
 
-    def should_be_killed(self, container):
-        if not container:
-            logger.warning("No container details, skipping checks")
-            return Verdict(False, container, None)
-        if self._on_global_white_list(container):
-            return Verdict(False, container, None)
+    def should_be_killed(self, subject):
+        if not subject:
+            logger.warning("No {} details, skipping checks".format(self._subject_type))
+            return Verdict(False, subject, None)
+        if self._run_whitelists and self._on_global_white_list(subject):
+            return Verdict(False, subject, None)
 
         reasons = []
         for rule in self._rules:
-            if self._on_per_rule_whitelist(container, rule['name']):
+            if self._run_whitelists and self._on_per_rule_whitelist(subject, rule['name']):
                 continue
             try:
-                if rule['rule'](container):
+                if rule['rule'](subject):
                     reasons.append(rule['name'])
                     if self._config.stop_on_first_violation:
                         break
@@ -157,9 +159,9 @@ class Judge:
                 reasons.append("Exception - rule: {0}, class: {1}, val: {2}"
                                .format(rule['name'], e.__class__.__name__, str(e)))
         if len(reasons) > 0:
-            return Verdict(True, container, reasons)
+            return Verdict(True, subject, reasons)
         else:
-            return Verdict(False, container, None)
+            return Verdict(False, subject, None)
 
     def _load_whitelist_from_config(self):
         self._global_whitelist = [re.compile("^{0}$".format(r)) for r in self._config.white_list
@@ -176,17 +178,17 @@ class Judge:
 class Killer(Observer):
     def __init__(self, manager, mode):
         super().__init__()
-        self.__mode = mode
-        self.__manager = manager
-        self.__status = StatusDictionary()
+        self._mode = mode
+        self._manager = manager
+        self._status = StatusDictionary()
 
     def on_next(self, verdict):
         logger.info("Container {0} is detected to violate the rule \"{1}\". {2} the container [{3} mode]"
-                    .format(verdict.container, json.dumps(verdict.reasons),
-                            "Not stopping" if self.__mode == Mode.Warn else "Stopping", self.__mode))
+                    .format(verdict.subject, json.dumps(verdict.reasons),
+                            "Not stopping" if self._mode == Mode.Warn else "Stopping", self._mode))
         self.register_kill(verdict)
-        if self.__mode == Mode.Kill:
-            self.__manager.kill_container(verdict.container)
+        if self._mode == Mode.Kill:
+            self._manager.kill_container(verdict.subject)
 
     def on_error(self, e):
         logger.warning("An error occurred while trying to check running containers")
@@ -196,19 +198,19 @@ class Killer(Observer):
         logger.error("This should never happen. Please contact the dev")
 
     def get_stats(self):
-        return self.__status.copy()
+        return self._status.copy()
 
     def register_kill(self, verdict):
-        self.__status.register_killed(verdict.container, verdict.reasons)
+        self._status.register_killed(verdict.subject, verdict.reasons)
 
 
 class TriggerHandler(Observer):
     def __init__(self):
         super().__init__()
-        self.__triggers = triggers
+        self._triggers = triggers
 
     def on_next(self, verdict):
-        for trigger in self.__triggers:
+        for trigger in self._triggers:
             try:
                 trigger["trigger"](verdict)
             except Exception as e:
