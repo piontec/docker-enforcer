@@ -212,8 +212,8 @@ def make_container_periodic_check_compatible(cont_json, url):
 
 
 def process_positive_verdict(verdict, req, register=True):
-    enhanced_info = "." if not hasattr(verdict.container, "params") else " on container {}.".format(
-        verdict.container.params["Name"])
+    enhanced_info = "." if not hasattr(verdict.subject, "params") else " on container {}.".format(
+        verdict.subject.params["Name"])
     if config.mode == Mode.Warn:
         app.logger.info("Authorization plugin detected rules violation for operation {}{}"
                         "Running in WARN mode, so the request is allowed anyway. Broken rules: {}"

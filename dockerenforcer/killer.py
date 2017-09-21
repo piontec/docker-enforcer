@@ -100,7 +100,7 @@ class Verdict:
     def __init__(self, verdict, container, reasons):
         super().__init__()
         self.reasons = reasons
-        self.container = container
+        self.subject = container
         self.verdict = verdict
 
 
@@ -184,11 +184,11 @@ class Killer(Observer):
 
     def on_next(self, verdict):
         logger.info("Container {0} is detected to violate the rule \"{1}\". {2} the container [{3} mode]"
-                    .format(verdict.container, json.dumps(verdict.reasons),
+                    .format(verdict.subject, json.dumps(verdict.reasons),
                             "Not stopping" if self._mode == Mode.Warn else "Stopping", self._mode))
         self.register_kill(verdict)
         if self._mode == Mode.Kill:
-            self._manager.kill_container(verdict.container)
+            self._manager.kill_container(verdict.subject)
 
     def on_error(self, e):
         logger.warning("An error occurred while trying to check running containers")
@@ -201,7 +201,7 @@ class Killer(Observer):
         return self._status.copy()
 
     def register_kill(self, verdict):
-        self._status.register_killed(verdict.container, verdict.reasons)
+        self._status.register_killed(verdict.subject, verdict.reasons)
 
 
 class TriggerHandler(Observer):
