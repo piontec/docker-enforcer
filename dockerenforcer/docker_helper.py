@@ -13,9 +13,16 @@ from requests.packages.urllib3.exceptions import ProtocolError
 logger = logging.getLogger("docker_enforcer")
 
 
+class CheckSource:
+    AuthzPlugin = "authz_plugin"
+    Periodic = "periodic"
+    Event = "event"
+
+
 class Container:
-    def __init__(self, cid, params, metrics, position):
+    def __init__(self, cid, params, metrics, position, check_source):
         super().__init__()
+        self.check_source = check_source
         self.position = position
         self.metrics = metrics
         self.params = params
@@ -28,29 +35,29 @@ class Container:
 class DockerHelper:
     def __init__(self, config):
         super().__init__()
-        self.__padlock = threading.Lock()
-        self.__check_in_progress = False
-        self.__config = config
-        self.__client = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
-        self.__params_cache = {}
+        self._padlock = threading.Lock()
+        self._check_in_progress = False
+        self._config = config
+        self._client = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
+        self._params_cache = {}
         self.last_check_containers_run_end_timestamp = datetime.datetime.min
         self.last_check_containers_run_start_timestamp = datetime.datetime.min
         self.last_check_containers_run_time = datetime.timedelta.min
         self.last_periodic_run_ok = False
 
-    def check_container(self, container_id, remove_from_cache=False):
+    def check_container(self, container_id, check_source, remove_from_cache=False):
         try:
             if remove_from_cache:
                 self.remove_from_cache(container_id)
 
-            if not self.__config.disable_params:
+            if not self._config.disable_params:
                 params = self.get_params(container_id)
             else:
                 params = {}
-            if not self.__config.disable_metrics:
+            if not self._config.disable_metrics:
                 logger.debug("[{0}] Starting to fetch metrics for {1}".format(threading.current_thread().name,
                                                                               container_id))
-                metrics = self.__client.stats(container=container_id, decode=True, stream=False)
+                metrics = self._client.stats(container=container_id, decode=True, stream=False)
             else:
                 metrics = {}
             logger.debug("[{0}] Fetched data for container {1}".format(threading.current_thread().name, container_id))
@@ -63,40 +70,40 @@ class DockerHelper:
         except Exception as e:
             logger.error("Unexpected error when fetching info about container {0}: {1}".format(container_id, e))
             return None
-        return Container(container_id, params, metrics, 0)
+        return Container(container_id, params, metrics, 0, check_source)
 
-    def check_containers(self):
-        with self.__padlock:
-            if self.__check_in_progress:
+    def check_containers(self, check_source):
+        with self._padlock:
+            if self._check_in_progress:
                 logger.warning("[{0}] Previous check did not yet complete, consider increasing CHECK_INTERVAL_S"
                                .format(threading.current_thread().name))
                 return
-            self.__check_in_progress = True
+            self._check_in_progress = True
         logger.debug("Periodic check start: connecting to get the list of containers")
         self.last_check_containers_run_start_timestamp = datetime.datetime.utcnow()
         try:
-            containers = self.__client.containers(quiet=True)
+            containers = self._client.containers(quiet=True)
             logger.debug("[{0}] Fetched containers list from docker daemon".format(threading.current_thread().name))
         except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
             logger.error("Timeout while trying to get list of containers from docker: {0}".format(e))
-            with self.__padlock:
-                self.__check_in_progress = False
+            with self._padlock:
+                self._check_in_progress = False
             self.last_periodic_run_ok = False
             return
         except Exception as e:
             logger.error("Unexpected error while trying to get list of containers from docker: {0}".format(e))
-            with self.__padlock:
-                self.__check_in_progress = False
+            with self._padlock:
+                self._check_in_progress = False
             self.last_periodic_run_ok = False
             return
         ids = [container['Id'] for container in containers]
         for container_id in ids:
-            container = self.check_container(container_id)
+            container = self.check_container(container_id, check_source)
             if container is None:
                 continue
             yield container
         logger.debug("Containers checked")
-        if self.__config.cache_params:
+        if self._config.cache_params:
             logger.debug("Purging cache")
             self.purge_cache(ids)
         self.last_periodic_run_ok = True
@@ -104,17 +111,17 @@ class DockerHelper:
         self.last_check_containers_run_time = self.last_check_containers_run_end_timestamp \
             - self.last_check_containers_run_start_timestamp
         logger.debug("Periodic check done")
-        with self.__padlock:
-            self.__check_in_progress = False
+        with self._padlock:
+            self._check_in_progress = False
 
     def get_params(self, container_id):
-        if self.__config.cache_params and container_id in self.__params_cache:
+        if self._config.cache_params and container_id in self._params_cache:
             logger.debug("Returning cached params for container {0}".format(container_id))
-            return self.__params_cache[container_id]
+            return self._params_cache[container_id]
 
         logger.debug("[{0}] Starting to fetch params for {1}".format(threading.current_thread().name, container_id))
         try:
-            params = self.__client.inspect_container(container_id)
+            params = self._client.inspect_container(container_id)
         except NotFound as e:
             logger.warning("Container {0} not found - {1}.".format(container_id, e))
             return None
@@ -125,27 +132,27 @@ class DockerHelper:
             logger.error("Unexpected error when fetching params for container {0}: {1}".format(container_id, e))
             return {}
         logger.debug("[{0}] Params fetched for {1}".format(threading.current_thread().name, container_id))
-        if not self.__config.cache_params:
+        if not self._config.cache_params:
             return params
 
         logger.debug("[{0}] Storing params of {1} in cache".format(threading.current_thread().name, container_id))
-        self.__params_cache[container_id] = params
+        self._params_cache[container_id] = params
         return params
 
     def purge_cache(self, running_container_ids):
-        diff = [c for c in self.__params_cache.keys() if c not in running_container_ids]
+        diff = [c for c in self._params_cache.keys() if c not in running_container_ids]
         for cid in diff:
-            self.__params_cache.pop(cid, None)
+            self._params_cache.pop(cid, None)
 
     def remove_from_cache(self, container_id):
-        self.__params_cache.pop(container_id, None)
+        self._params_cache.pop(container_id, None)
 
     def get_events_observable(self):
         successful = False
         ev = None
         while not successful:
             try:
-                ev = self.__client.events(decode=True)
+                ev = self._client.events(decode=True)
             except (ReadTimeout, ProtocolError, JSONDecodeError) as e:
                 logger.error("Communication error when subscribing for container events, retrying in 5s: {0}".format(e))
                 time.sleep(5)
@@ -157,7 +164,7 @@ class DockerHelper:
 
     def kill_container(self, container):
         try:
-            self.__client.stop(container.params['Id'])
+            self._client.stop(container.params['Id'])
         except (ReadTimeout, ProtocolError) as e:
             logger.error("Communication error when stopping container {0}: {1}".format(container.cid, e))
         except Exception as e:
