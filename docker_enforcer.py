@@ -188,6 +188,8 @@ def authz_request():
     json_data = json.loads(request.data.decode(request.charset))
     url = parse.urlparse(json_data["RequestUri"])
     json_data["ParsedUri"] = url
+    if config.log_authz_requests:
+        log_authz_req(json_data)
     verdict = requests_judge.should_be_killed(json_data)
     if verdict.verdict:
         return process_positive_verdict(verdict, json_data, register=False)
@@ -200,6 +202,12 @@ def authz_request():
         if verdict.verdict:
             return process_positive_verdict(verdict, json_data)
     return to_formatted_json(json.dumps({"Allow": True}))
+
+
+def log_authz_req(json_data):
+    user_info = json_data["User"] if 'UserAuthNMethod' in json_data else 'unauthorized'
+    app.logger.info("[AUTHZ_REQ] New auth request: user: {}, method: {}, uri: {}"
+                    .format(user_info, json_data["RequestMethod"], json_data["RequestUri"]))
 
 
 def make_container_periodic_check_compatible(cont_json, url):

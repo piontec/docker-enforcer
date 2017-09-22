@@ -2,6 +2,7 @@ import json
 import unittest
 
 import re
+from unittest import mock
 
 from docker_enforcer import app, judge, config, requests_judge, trigger_handler
 from dockerenforcer.config import Mode
@@ -22,6 +23,7 @@ class ApiRequestFilterTest(unittest.TestCase):
 
     def setUp(self):
         config.mode = Mode.Kill
+        config.log_authz_requests = True
         self.de = app
         self.de.testing = True
         self.app = self.de.test_client()
@@ -59,3 +61,15 @@ class ApiRequestFilterTest(unittest.TestCase):
         res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run)
         self._check_response(res, False, "must have memory limit")
         self.assertTrue(ApiRequestFilterTest.test_trigger_flag)
+
+    def test_logs_correctly(self):
+        with mock.patch.object(app.logger, 'info') as mock_info:
+            self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_run_with_tls)
+            self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run)
+            self.assertTrue(mock_info.called
+                            and mock_info.call_count == 2
+                            and mock_info.call_args_list[0][0][0] ==
+                            '[AUTHZ_REQ] New auth request: user: client, method: GET, uri: /v1.27/containers/json'
+                            and mock_info.call_args_list[1][0][0] ==
+                            '[AUTHZ_REQ] New auth request: user: unauthorized, method: POST, '
+                            'uri: /v1.30/containers/create')
