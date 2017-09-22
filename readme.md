@@ -5,10 +5,12 @@ Docker enforcer audits containers running on a shared docker host. The aim of do
 
 ## Index
 * [How - Running and Configuring](#how-running-and-confguring)
-  * [Preapring rules file](#preparing-rules-file)
+  * [Preapring the rules file](#preparing-the-rules-file)
   * [Running enforcer as a container](#running-enforcer-as-a-container)
   * [Run modes](#run-modes)
+  * [Recommended mode setup for production hosts](#recommended-mode-setup-for-production-hosts)
   * [Configuration options](#configuration-options)
+  * [Running additional actions when a rule violation is detected](running-additional-actions-when-a-rule-violation-is-detected)
 * [Accessing data about running docker enforcer container](#accessing-data-about-running-docker-enforcer-container)
 
 ## How - Running and Configuring
@@ -18,7 +20,7 @@ It's the easiest to run docker enforcer as a container. Before starting, pay att
 - Docker enforcer can kill itself if you're not paying attention (when running as a container)! You can protect it from stopping itself by using the white list contains rules to never kill containers named 'docker-enforcer' or 'docker_enforcer'.
 - You can always exclude some containers from being killed due to rules evaluation by including their name in the white list (see configuration options).
  
-### Preparing rules file
+### Preparing the rules file
 Docker-enforcer works by checking a set of rules against the containers that are running on the docker host. Each of the rules is applied to data about each container. Rules indicate which container should be killed, so if any of the rules returns `True`, the container will be stopped (unless it's on the white list). 
 The rules file must include a python list of dictionaries, where each of the dictionaries is a single rule. The rule includes its name and a lambda function, which contains evaluation logic. Container's data that can be checked by a rule includes the following properties:
 - `position` - the sequence number of the container on the list of all containers, sorted by the start date,
@@ -89,13 +91,31 @@ docker run -d --name docker_enforcer -p 8888:8888 --privileged -v /rules_dir:/op
 After the successful run, a simple web API will be exposed to show current rules and status (see below). You can access `http://localhost:8888/rules` to see the list of rules configured. This should be in sync with the rules file you passed to the container.
 
 ### Run modes
-Currently, Docker Enforcer supports two different run modes. They can be used together, but at least one fo them must be enabled. The supported modes are:
+Docker Enforcer supports different run modes. In general, the modes above can be mixed, but you shouldn't run "Events mode" and "Authz plugin mode" together. The supported modes are:
 
 #### Periodic mode
 In this mode, Docker Enforcer has a configured time period. When it passes, the enforcer connects to docker daemon, fetches the list of all currently running containers and then runs all the rules against every container on the list. 
 
 #### Events mode
 In this mode, Docker Enforcer listens for container lifetime events from the docker daemon. Each time you run or modify your container, you pass it a set of configuration options. This situation is also reported by docker daemon for anyone willing to act on it. Docker enforcer listens for these events and then runs all rules against the single container related to the event signalled by the docker daemon.
+
+#### Authz plugin mode
+In this mode, Docker Enforcer runs as [docker authorization plugin](https://docs.docker.com/engine/extend/plugins_authorization/). As a result your users won't even be able to complete an API call, that has parameters that don't validate with your rules. In that case, an error message is returned to the user and the call is not executed by docker. This mode additionally allows you to use [request rules]() for low level auditing of API calls. This requires additional configuration of docker daemon, as below:
+* You need to register your valid endpoint as docker plugin. To do this, create a file `/etc/docker/plugins/enforcer.spec` with this single line:
+```
+tcp://127.0.0.1:5000
+```
+* You need to let know docker to use this plugin. The simplest way is to create (or add to your existing one) docker configuration file in `/etc/docker/daemon.json` and be sure it includes the following JSON line:
+```
+{
+"authorization-plugins": ["enforcer"]
+}
+```
+
+### Recommended mode setup for production hosts
+In production, you might want a setup, that allows you to test new compliance rules on a production system, but without hurting anybody by mistake, while enforcing your battle tested rules at the same time. The solution is to run 2 docker enforcers at the same time:
+- 1st - main Docker Enforcer: configured in Kill mode, running either in "Event+Periodic" or "Authz plugin" mode; here you run your stable and tested compliance rules
+- 2nd - auditing Docker Enforcer: configured in Warn mode only and running in "Event+Periodic" mode or just one of them. Here you can test and audit your new rules, so that even if they don't work exactly as you expected, no container is stopped, only logged.
 
 ### Configuration options
 All the configuration options are loaded from environment variables, which makes them pretty easy to configure when running as docker container (by passing to docker with `-e KEY=VAL` added to the run command above).
@@ -112,12 +132,20 @@ The following options are supported (values after '=' below are the defaults):
 - "DISABLE_METRICS=False" - disable container's metrics fetching; this decreases the number of requests made to the docker daemon (metrics fetching is quite heavy), but you can't use any rules that refer to `c.metrics` property
 - "IMMEDIATE_PERIODICAL_START=False" - normally, when the enforcer is started in Periodic mode, it waits CHECK_INTERVAL_S seconds and just then starts the first check; if you want the check to start immediately after daemon startup - set this to True,
 - "STOP_ON_FIRST_VIOLATION=True" - normally, docker enforcer stops checking validation rules after it finds the first matching rules - this allows for a better performance; still, if you want to keep checking all the rules and have all the violations, not only the first one, logged - set this to True,
+- "LOG_AUTHZ_REQUESTS=False" - log all incoming docker API requests received in Authz mode. This logs username (if available - only when TLS auth is used), HTTP method and URI for each received authorization request. Of course, works only in Authz plugin mode.
 - "WHITE_LIST=docker-enforcer,docker.*,docker-enforcer:steal socket, docker*:steal socket" - comma separated list of white list definitions, where each definition can be:
   - container name, like "docker-enforcer": this makes container named exactly "docker-enforcer" to be excluded from checks of all rules
   - container name regexp, like "docker.*": this makes any container which name matches regex "docker.*" to be excluded from checks of all rules
   - container and rule name, like "docker-enforcer:steal socket": this makes container named exactly "docker-enforcer" to be excluded from checking against the rule named "steal socket"
   - container name regexp and rule name, like "docker.*:steal socket": this makes any container which name matches regex "docker.*" to be excluded from checking against the rule named "steal socket"
- 
+
+### Running additional actions when a rule violation is detected
+When a violation is detected, docker enforcer logs information about it and stops the container (only
+in Kill mode). If you want to run some additional logic on this event, you can use a similar mechanism
+as with the rules file. You can overwrite the file `triggers/triggers.py` and inject your own logic that
+will be triggered on violation detection event. You can see an example trigger that does additional
+logging in the default [triggers/triggers.py] file.
+
 ## Accessing data about running docker enforcer container
 Docker enforcer exposes a simple HTTP API on the port 8888. If the "Accept:" header in client's request includes HTML, a human-friendly JSON will be returned. Otherwise, plain text JSON is sent in response.  This currently includes the following endpoints:
 - `/` - shows statistics about containers stopped by docker enforcer; shows all detections since starting the service
