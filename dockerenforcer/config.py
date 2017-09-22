@@ -30,6 +30,7 @@ class Config:
         self.run_periodic = bool(os.getenv('RUN_PERIODIC', 'True') == 'True')
         self.immediate_periodical_start = bool(os.getenv('IMMEDIATE_PERIODICAL_START', 'False') == 'True')
         self.stop_on_first_violation = bool(os.getenv('STOP_ON_FIRST_VIOLATION', 'True') == 'True')
+        self.log_authz_requests = bool(os.getenv('LOG_AUTHZ_REQUESTS', 'False') == 'True')
         self.version = version
 
 
