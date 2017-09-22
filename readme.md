@@ -5,12 +5,12 @@ Docker enforcer audits containers running on a shared docker host. The aim of do
 
 ## Index
 * [How - Running and Configuring](#how-running-and-confguring)
-  * [Preapring the rules file](#preparing-the-rules-file)
+  * [Preparing the rules file](#preparing-the-rules-file)
   * [Running enforcer as a container](#running-enforcer-as-a-container)
   * [Run modes](#run-modes)
   * [Recommended mode setup for production hosts](#recommended-mode-setup-for-production-hosts)
   * [Configuration options](#configuration-options)
-  * [Running additional actions when a rule violation is detected](running-additional-actions-when-a-rule-violation-is-detected)
+  * [Running additional actions when a rule violation is detected](#running-additional-actions-when-a-rule-violation-is-detected)
 * [Accessing data about running docker enforcer container](#accessing-data-about-running-docker-enforcer-container)
 
 ## How - Running and Configuring
@@ -144,7 +144,7 @@ When a violation is detected, docker enforcer logs information about it and stop
 in Kill mode). If you want to run some additional logic on this event, you can use a similar mechanism
 as with the rules file. You can overwrite the file `triggers/triggers.py` and inject your own logic that
 will be triggered on violation detection event. You can see an example trigger that does additional
-logging in the default [triggers/triggers.py] file.
+logging in the default [triggers/triggers.py](triggers/triggers.py) file.
 
 ## Accessing data about running docker enforcer container
 Docker enforcer exposes a simple HTTP API on the port 8888. If the "Accept:" header in client's request includes HTML, a human-friendly JSON will be returned. Otherwise, plain text JSON is sent in response.  This currently includes the following endpoints:
