@@ -1,4 +1,4 @@
-# docker enforcer
+# docker enforcer [![Build Status](https://travis-ci.org/piontec/docker-enforcer.svg?branch=develop)](https://travis-ci.org/piontec/docker-enforcer)
 
 ## Why?
 Docker enforcer audits containers running on a shared docker host. The aim of docker enforcer is to stop containers running on a single host, but not obeying rules configured by the host's administrator. These rules may restrict values used as container's parameters or values reported by container's performance metrics.
