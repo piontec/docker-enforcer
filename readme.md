@@ -1,7 +1,8 @@
 # docker enforcer [![Build Status](https://travis-ci.org/piontec/docker-enforcer.svg?branch=develop)](https://travis-ci.org/piontec/docker-enforcer)
 
 ## Why?
-Docker enforcer audits containers running on a shared docker host. The aim of docker enforcer is to stop containers running on a single host, but not obeying rules configured by the host's administrator. These rules may restrict values used as container's parameters or values reported by container's performance metrics.
+Docker enforcer audits containers running on a shared docker host. The aim of docker enforcer is to
+stop containers running on a single host, but not obeying rules configured by the host's administrator. These rules may restrict values used as container's parameters or values reported by container's performance metrics.
 
 ## Index
 * [How - Configuring and Running](#how-configuring-and-running)
@@ -17,19 +18,33 @@ Docker enforcer audits containers running on a shared docker host. The aim of do
 ## How - Configuring and Running
 It's the easiest to run docker enforcer as a container. Before starting, pay attention to a few facts:
 - Docker enforcer needs to be run as a privileged container and needs access to the docker socket.
-- To keep the rule expressions as elastic as possible, they are directly stored as python code. This is a security risk, as any python code put into the rules file will be executed in a privileged container with access to the docker socket. Make sure that you rules file has restricted access and can be modified only by the root user.
-- Docker enforcer can kill itself if you're not paying attention (when running as a container)! You can protect it from stopping itself by using the white list contains rules to never kill containers named 'docker-enforcer' or 'docker_enforcer'.
-- You can always exclude some containers from being killed due to rules evaluation by including their name in the white list (see configuration options).
+- To keep the rule expressions as elastic as possible, they are directly stored as python code. This
+is a security risk, as any python code put into the rules file will be executed in a privileged
+container with access to the docker socket. Make sure that you rules file has restricted access and
+can be modified only by the root user.
+- Docker enforcer can kill itself if you're not paying attention (when running as a container)! You
+can protect it from stopping itself by using the white list contains rules to never kill containers
+named 'docker-enforcer' or 'docker_enforcer'.
+- You can always exclude some containers from being killed due to rules evaluation by including their
+name in the white list (see configuration options).
  
 ### Preparing the rules file
-Docker-enforcer works by checking a set of rules against the containers that are running on the docker host. Each of the rules is applied to data about each container. Rules indicate which container should be killed, so if any of the rules returns `True`, the container will be stopped (unless it's on the white list). 
-The rules file must include a python list of dictionaries, where each of the dictionaries is a single rule. The rule includes its name and a lambda function, which contains evaluation logic. Container's data that can be checked by a rule includes the following properties:
-- `position` - the sequence number of the container on the list of all containers, sorted by the start date,
+Docker-enforcer works by checking a set of rules against the containers that are running on the docker
+host. Each of the rules is applied to data about each container. Rules indicate which container should
+be killed, so if any of the rules returns `True`, the container will be stopped (unless it's on the
+white list).
+The rules file must include a python list of dictionaries, where each of the dictionaries is a single
+rule. The rule includes its name and a lambda function, which contains evaluation logic. Container's
+data that can be checked by a rule includes the following properties:
+- `position` - the sequence number of the container on the list of all containers, sorted by the start
+date,
 - `params` - a dictionary of parameters used to start this container (for example with `docker run`),
 - `metrics` - a dictionary of performance metrics reported by the docker daemon for the container.
  
-The rules file is evaluated against all running containers each `CHECK_INTERVAL_S` seconds. Also, all rules are evaluated against a single container, when the container is being started.  
-The very basic rules file, that doesn't stop any container looks like this (this is also the default list set):
+The rules file is evaluated against all running containers each `CHECK_INTERVAL_S` seconds. Also, all
+rules are evaluated against a single container, when the container is being started.
+The very basic rules file, that doesn't stop any container looks like this (this is also the default
+list set):
 ```python
 rules = [
     {
@@ -38,7 +53,8 @@ rules = [
     }
 ]
 ```
-This creates just a single rule, which has name "always false" and matches no container (so, no container will be ever stopped because of this rule).
+This creates just a single rule, which has name "always false" and matches no container (so, no container
+will be ever stopped because of this rule).
 
 #### Sample rules - using container's configuration parameters (static)
 1. All containers must have memory limits set:
@@ -119,11 +135,16 @@ checking all the rules and have all the violations, not only the first one, logg
 - "LOG_AUTHZ_REQUESTS=False" - log all incoming docker API requests received in Authz mode. This logs
 username (if available - only when TLS auth is used), HTTP method and URI for each received authorization
 request. Of course, works only in Authz plugin mode.
-- "WHITE_LIST=docker-enforcer,docker.*,docker-enforcer:steal socket, docker*:steal socket" - comma separated list of white list definitions, where each definition can be:
-  - container name, like "docker-enforcer": this makes container named exactly "docker-enforcer" to be excluded from checks of all rules
-  - container name regexp, like "docker.*": this makes any container which name matches regex "docker.*" to be excluded from checks of all rules
-  - container and rule name, like "docker-enforcer:steal socket": this makes container named exactly "docker-enforcer" to be excluded from checking against the rule named "steal socket"
-  - container name regexp and rule name, like "docker.*:steal socket": this makes any container which name matches regex "docker.*" to be excluded from checking against the rule named "steal socket"
+- "WHITE_LIST=docker-enforcer,docker.*,docker-enforcer:steal socket, docker*:steal socket" - comma
+separated list of white list definitions, where each definition can be:
+  - container name, like "docker-enforcer": this makes container named exactly "docker-enforcer" to be
+  excluded from checks of all rules
+  - container name regexp, like "docker.*": this makes any container which name matches regex "docker.*"
+  to be excluded from checks of all rules
+  - container and rule name, like "docker-enforcer:steal socket": this makes container named exactly
+  "docker-enforcer" to be excluded from checking against the rule named "steal socket"
+  - container name regexp and rule name, like "docker.*:steal socket": this makes any container which
+  name matches regex "docker.*" to be excluded from checking against the rule named "steal socket"
 
 ### Running additional actions when a rule violation is detected
 When a violation is detected, docker enforcer logs information about it and stops the container (only
