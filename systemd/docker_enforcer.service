@@ -7,7 +7,7 @@ StartLimitInterval=0
 [Service]
 WorkingDirectory=/DE_PATH
 EnvironmentFile=/DE_PATH/environment.conf
-ExecStart=/opt/gp2/infra_files/docker_enforcer/main/venv/bin/gunicorn \
+ExecStart=/GUNICORN_PATH/gunicorn \
   -w 1 --threads 16 -b 0.0.0.0:8888 \
   --access-logfile /var/log/docker_enforcer.log \
   --error-logfile - \
