@@ -115,17 +115,33 @@ def is_configured_event(e):
     return False
 
 
+def python_file_to_json(req, file_name: str):
+    try:
+        with open(file_name, "r") as file:
+            data = file.read()
+    except IOError as e:
+        data = "Error: {}".format(e.strerror)
+
+    if req.accept_mimetypes.accept_html:
+        html = highlight(data, Python3Lexer(), HtmlFormatter(full=True, linenos='table'))
+        return Response(html, content_type="text/html")
+    json_res = json.dumps(data, sort_keys=True, indent=4, separators=(',', ': '))
+    return Response(json_res, content_type="application/json")
+
+
 @app.route('/rules')
 def show_rules():
-    if request.accept_mimetypes.accept_html:
-        with open("rules/rules.py", "r") as file:
-            data = file.read()
-            html = highlight(data, Python3Lexer(), HtmlFormatter(full=True, linenos='table'))
-            return Response(html, content_type="text/html")
-    rules_txt = [{"name": d["name"], "rule": inspect.getsource(d["rule"]).strip().split(':', 1)[1].strip()} for d in
-                 rules]
-    data = json.dumps(rules_txt, sort_keys=True, indent=4, separators=(',', ': '))
-    return Response(data, content_type="application/json")
+    return python_file_to_json(request, "rules/rules.py")
+
+
+@app.route('/request_rules')
+def show_request_rules():
+    return python_file_to_json(request, "request_rules/request_rules.py")
+
+
+@app.route('/triggers')
+def show_triggers():
+    return python_file_to_json(request, "triggers/triggers.py")
 
 
 @app.route('/metrics')

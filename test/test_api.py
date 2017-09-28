@@ -4,9 +4,11 @@ import unittest
 import re
 from unittest import mock
 
+from flask import Response
+
 from docker_enforcer import app, judge, config, requests_judge, trigger_handler
 from dockerenforcer.config import Mode
-from test.test_helpers import ApiTestHelper
+from test.test_helpers import ApiTestHelper, DefaultRulesHelper
 
 
 class ApiRequestFilterTest(unittest.TestCase):
@@ -83,3 +85,33 @@ class ApiRequestFilterTest(unittest.TestCase):
         res = self.app.post('/AuthZPlugin.AuthZReq',
                             data=ApiTestHelper.authz_req_run_with_privileged_name_docker_enforcer)
         self._check_response(res, True)
+
+    def _check_rules_response(self, res: Response, mime_type: str, data: bytearray=None):
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.content_type, mime_type)
+        if data is not None:
+            self.assertEqual(res.data, data)
+
+    def test_fetch_rules(self):
+        res = self.app.get('/rules')
+        self._check_rules_response(res, "application/json", DefaultRulesHelper.rules_json)
+
+    def test_fetch_rules_html(self):
+        res = self.app.get('/rules', headers={"Accept": "text/html"})
+        self._check_rules_response(res, "text/html")
+
+    def test_fetch_triggers(self):
+        res = self.app.get('/triggers')
+        self._check_rules_response(res, "application/json", DefaultRulesHelper.triggers_json)
+
+    def test_fetch_triggers_html(self):
+        res = self.app.get('/triggers', headers={"Accept": "text/html"})
+        self._check_rules_response(res, "text/html")
+
+    def test_fetch_request_rules(self):
+        res = self.app.get('/request_rules')
+        self._check_rules_response(res, "application/json", DefaultRulesHelper.request_rules)
+
+    def test_fetch_request_rules_html(self):
+        res = self.app.get('/request_rules', headers={"Accept": "text/html"})
+        self._check_rules_response(res, "text/html")
