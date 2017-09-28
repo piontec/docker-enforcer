@@ -1,6 +1,7 @@
 import inspect
 import json
 import logging
+import re
 import signal
 import sys
 from base64 import b64decode
@@ -193,8 +194,10 @@ def authz_request():
     verdict = requests_judge.should_be_killed(json_data)
     if verdict.verdict:
         return process_positive_verdict(verdict, json_data, register=False)
+
+    containers_regex = re.compile("^(/v.+?)?/containers/.+?$")
     operation = url.path.split("/")[-1]
-    if operation == "create" and "RequestBody" in json_data:
+    if containers_regex.match(url.path) and operation == "create" and "RequestBody" in json_data:
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
         container = make_container_periodic_check_compatible(int_json, url)
