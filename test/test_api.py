@@ -16,6 +16,10 @@ class ApiRequestFilterTest(unittest.TestCase):
                        r['RequestMethod'] in ['GET', 'HEAD'] and x.match(r['ParsedUri'].path)}
     test_trigger_flag = False
     test_trigger = {"name": "set local flag", "trigger": lambda v: ApiRequestFilterTest.set_trigger_flag()}
+    forbid_privileged_rule = {
+           "name": "can't use privileged or cap-add without being on the whitelist",
+           "rule": lambda c: c.params["HostConfig"]["Privileged"] or c.params["HostConfig"]["CapAdd"] is not None
+       }
 
     @staticmethod
     def set_trigger_flag():
@@ -71,5 +75,11 @@ class ApiRequestFilterTest(unittest.TestCase):
                             and mock_info.call_args_list[0][0][0] ==
                             '[AUTHZ_REQ] New auth request: user: client, method: GET, uri: /v1.27/containers/json'
                             and mock_info.call_args_list[1][0][0] ==
-                            '[AUTHZ_REQ] New auth request: user: unauthorized, method: POST, '
+                            '[AUTHZ_REQ] New auth request: user: [unknown], method: POST, '
                             'uri: /v1.30/containers/create')
+
+    def test_violates_rules_but_on_whitelist(self):
+        judge._rules = [self.forbid_privileged_rule]
+        res = self.app.post('/AuthZPlugin.AuthZReq',
+                            data=ApiTestHelper.authz_req_run_with_privileged_name_docker_enforcer)
+        self._check_response(res, True)

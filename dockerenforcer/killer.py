@@ -119,12 +119,16 @@ class Judge:
     @staticmethod
     def _get_name_info(container):
         has_name = container.params and 'Name' in container.params
-        name = container.params['Name'][1:] if has_name else container.cid
+        if has_name:
+            name = container.params['Name'][1:] if container.params['Name'].startswith('/') \
+                else container.params['Name']
+        else:
+            name = container.cid
         return has_name, name
 
     def _on_global_white_list(self, container):
         has_name, name = self._get_name_info(container)
-        on_list = has_name and any(rn.match(container.params['Name'][1:]) for rn in self._global_whitelist)
+        on_list = has_name and any(rn.match(name) for rn in self._global_whitelist)
 
         if on_list:
             logger.debug("Container {0} is on global white list (for all rules)".format(name))
@@ -133,7 +137,7 @@ class Judge:
     def _on_per_rule_whitelist(self, container, rule_name):
         has_name, name = self._get_name_info(container)
         on_list = has_name and rule_name in self._per_rule_whitelist \
-            and any(rn.match(container.params['Name'][1:]) for rn in self._per_rule_whitelist[rule_name])
+            and any(rn.match(name) for rn in self._per_rule_whitelist[rule_name])
 
         if on_list:
             logger.debug("Container {0} is on white list for rule '{1}'".format(name, rule_name))

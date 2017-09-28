@@ -205,7 +205,7 @@ def authz_request():
 
 
 def log_authz_req(json_data):
-    user_info = json_data["User"] if 'UserAuthNMethod' in json_data else 'unauthorized'
+    user_info = json_data["User"] if 'UserAuthNMethod' in json_data else '[unknown]'
     app.logger.info("[AUTHZ_REQ] New auth request: user: {}, method: {}, uri: {}"
                     .format(user_info, json_data["RequestMethod"], json_data["RequestUri"]))
 
