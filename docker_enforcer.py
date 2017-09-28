@@ -28,7 +28,7 @@ judge = Judge(rules, "container", config)
 requests_judge = Judge(request_rules, "request", config, run_whitelists=False)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
-
+containers_regex = re.compile("^(/v.+?)?/containers/.+?$")
 
 def create_app():
     def setup_logging():
@@ -195,7 +195,6 @@ def authz_request():
     if verdict.verdict:
         return process_positive_verdict(verdict, json_data, register=False)
 
-    containers_regex = re.compile("^(/v.+?)?/containers/.+?$")
     operation = url.path.split("/")[-1]
     if containers_regex.match(url.path) and operation == "create" and "RequestBody" in json_data:
         int_bytes = b64decode(json_data["RequestBody"])
