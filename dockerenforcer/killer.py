@@ -111,10 +111,8 @@ class Judge:
         self._subject_type = subject_type
         self._rules = rules
         self._config = config
-        self._global_whitelist = []
-        self._per_rule_whitelist = {}
         self._whitelist_separator = ":"
-        self._load_whitelist_from_config()
+        self._load_whitelists_from_config()
 
     @staticmethod
     def _get_name_info(container):
@@ -126,28 +124,41 @@ class Judge:
             name = container.cid
         return has_name, name
 
-    def _on_global_white_list(self, container):
+    def _on_global_whitelist(self, container):
         has_name, name = self._get_name_info(container)
         on_list = has_name and any(rn.match(name) for rn in self._global_whitelist)
-
         if on_list:
             logger.debug("Container {0} is on global white list (for all rules)".format(name))
-        return on_list
+            return True
+
+        image_name = container.params['Image']
+        on_list = any(rn.match(image_name) for rn in self._image_global_whitelist)
+        if on_list:
+            logger.debug("Container {0} is on global image white list (for all rules)".format(name))
+            return True
+        return False
 
     def _on_per_rule_whitelist(self, container, rule_name):
         has_name, name = self._get_name_info(container)
         on_list = has_name and rule_name in self._per_rule_whitelist \
             and any(rn.match(name) for rn in self._per_rule_whitelist[rule_name])
-
         if on_list:
-            logger.debug("Container {0} is on white list for rule '{1}'".format(name, rule_name))
-        return on_list
+            logger.debug("Container {} is on per rule white list for rule '{}'".format(name, rule_name))
+            return True
+
+        image_name = container.params['Image']
+        on_list = rule_name in self._image_per_rule_whitelist \
+            and any(rn.match(image_name) for rn in self._image_per_rule_whitelist[rule_name])
+        if on_list:
+            logger.debug("Container {} is on image per rule white list for rule '{}'".format(name, rule_name))
+            return True
+        return False
 
     def should_be_killed(self, subject):
         if not subject:
             logger.warning("No {} details, skipping checks".format(self._subject_type))
             return Verdict(False, subject, None)
-        if self._run_whitelists and self._on_global_white_list(subject):
+        if self._run_whitelists and self._on_global_whitelist(subject):
             return Verdict(False, subject, None)
 
         reasons = []
@@ -167,16 +178,23 @@ class Judge:
         else:
             return Verdict(False, subject, None)
 
-    def _load_whitelist_from_config(self):
-        self._global_whitelist = [re.compile("^{0}$".format(r)) for r in self._config.white_list
-                                  if r.find(self._whitelist_separator) == -1]
-        per_rule = [s.split(self._whitelist_separator, 1) for s in self._config.white_list
+    def _load_whitelists_from_config(self):
+        self._global_whitelist, self._per_rule_whitelist = self._load_lists_pair_from_config(self._config.white_list)
+        self._image_global_whitelist, self._image_per_rule_whitelist = self._load_lists_pair_from_config(
+            self._config.image_white_list)
+
+    def _load_lists_pair_from_config(self, whitelist: str):
+        global_whitelist = [re.compile("^{0}$".format(r)) for r in whitelist
+                            if r.find(self._whitelist_separator) == -1]
+        per_rule = [s.split(self._whitelist_separator, 1) for s in whitelist
                     if s.find(self._whitelist_separator) > -1]
         grouped = itertools.groupby(sorted(per_rule, key=lambda p: p[1]), key=lambda p: p[1])
+        per_rule_whitelist = {}
         for pair in grouped:
             rule_name = pair[0]
             containers_names = [re.compile("^{0}$".format(n[0])) for n in list(pair[1])]
-            self._per_rule_whitelist[rule_name] = containers_names
+            per_rule_whitelist[rule_name] = containers_names
+        return global_whitelist, per_rule_whitelist
 
 
 class Killer(Observer):

@@ -11,13 +11,13 @@ from dockerenforcer.config import Mode
 from test.test_helpers import ApiTestHelper, DefaultRulesHelper
 
 
-class ApiRequestFilterTest(unittest.TestCase):
+class ApiContainerTest(unittest.TestCase):
     mem_rule = {"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] == 0}
     cp_request_rule_regexp = re.compile("^/v1\.[23]\d/containers/test/archive$")
     cp_request_rule = {"name": "cp not allowed", "rule": lambda r, x=cp_request_rule_regexp:
                        r['RequestMethod'] in ['GET', 'HEAD'] and x.match(r['ParsedUri'].path)}
     test_trigger_flag = False
-    test_trigger = {"name": "set local flag", "trigger": lambda v: ApiRequestFilterTest.set_trigger_flag()}
+    test_trigger = {"name": "set local flag", "trigger": lambda v: ApiContainerTest.set_trigger_flag()}
     forbid_privileged_rule = {
            "name": "can't use privileged or cap-add without being on the whitelist",
            "rule": lambda c: c.params["HostConfig"]["Privileged"] or c.params["HostConfig"]["CapAdd"] is not None
@@ -25,7 +25,7 @@ class ApiRequestFilterTest(unittest.TestCase):
 
     @staticmethod
     def set_trigger_flag():
-        ApiRequestFilterTest.test_trigger_flag = True
+        ApiContainerTest.test_trigger_flag = True
 
     def setUp(self):
         config.mode = Mode.Kill
@@ -66,7 +66,7 @@ class ApiRequestFilterTest(unittest.TestCase):
         trigger_handler._triggers = [self.test_trigger]
         res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run)
         self._check_response(res, False, "must have memory limit")
-        self.assertTrue(ApiRequestFilterTest.test_trigger_flag)
+        self.assertTrue(ApiContainerTest.test_trigger_flag)
 
     def test_logs_correctly(self):
         with mock.patch.object(app.logger, 'info') as mock_info:
@@ -85,6 +85,21 @@ class ApiRequestFilterTest(unittest.TestCase):
         res = self.app.post('/AuthZPlugin.AuthZReq',
                             data=ApiTestHelper.authz_req_run_with_privileged_name_docker_enforcer)
         self._check_response(res, True)
+
+    def test_violates_rules_but_on_image_whitelist(self):
+        judge._rules = [self.forbid_privileged_rule]
+        judge._image_global_whitelist = [re.compile('^alpine$')]
+        res = self.app.post('/AuthZPlugin.AuthZReq',
+                            data=ApiTestHelper.authz_req_run_with_privileged_name_test)
+        judge._image_global_whitelist = []
+        self._check_response(res, True)
+
+
+class ApiInfoTest(unittest.TestCase):
+    def setUp(self):
+        self.de = app
+        self.de.testing = True
+        self.app = self.de.test_client()
 
     def _check_rules_response(self, res: Response, mime_type: str, data: bytearray=None):
         self.assertEqual(res.status_code, 200)
