@@ -30,6 +30,7 @@ jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
 containers_regex = re.compile("^(/v.+?)?/containers/.+?$")
 
+
 def create_app():
     def setup_logging():
         handler = StreamHandler(stream=sys.stdout)
