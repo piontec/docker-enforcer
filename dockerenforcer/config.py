@@ -3,7 +3,7 @@ from json import JSONEncoder
 import os
 import copy
 
-version = "0.8-dev"
+version = "0.9-dev"
 
 
 class Mode(Enum):
