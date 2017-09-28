@@ -13,6 +13,7 @@ stop containers running on a single host, but not obeying rules configured by th
   * [Run modes](#run-modes)
   * [Recommended mode setup for production hosts](#recommended-mode-setup-for-production-hosts)
   * [Running enforcer as a container](#running-enforcer-as-a-container)
+  * [Running enforcer as a system service with systemd](#running-enforcer-as-a-system-service-with-systemd)
 * [Accessing data about running docker enforcer container](#accessing-data-about-running-docker-enforcer-container)
 
 ## How - Configuring and Running
@@ -135,8 +136,9 @@ checking all the rules and have all the violations, not only the first one, logg
 - "LOG_AUTHZ_REQUESTS=False" - log all incoming docker API requests received in Authz mode. This logs
 username (if available - only when TLS auth is used), HTTP method and URI for each received authorization
 request. Of course, works only in Authz plugin mode.
-- "WHITE_LIST=docker-enforcer,docker.*,docker-enforcer:steal socket, docker*:steal socket" - comma
-separated list of white list definitions, where each definition can be:
+- "WHITE_LIST=docker-enforcer,docker_enforcer" - comma separated list of container name based white list
+definitions, which allow to define a whitelist based on a container name. Each definition can be (like in
+a sample value: "docker.*,docker-enforcer:steal socket,docker.*:steal socket"):
   - container name, like "docker-enforcer": this makes container named exactly "docker-enforcer" to be
   excluded from checks of all rules
   - container name regexp, like "docker.*": this makes any container which name matches regex "docker.*"
@@ -145,6 +147,10 @@ separated list of white list definitions, where each definition can be:
   "docker-enforcer" to be excluded from checking against the rule named "steal socket"
   - container name regexp and rule name, like "docker.*:steal socket": this makes any container which
   name matches regex "docker.*" to be excluded from checking against the rule named "steal socket"
+- "IMAGE_WHITE_LIST=''" - comma separated list of container image white list definitions, which allow to
+define a whitelist based on a name of docker image used to create the container. Each definition
+(like in a: "alpine.*,alpine:steal socket, alpine.*:steal socket") has the same syntax as in "WHITE_LIST"
+above.
 
 ### Running additional actions when a rule violation is detected
 When a violation is detected, docker enforcer logs information about it and stops the container (only
@@ -187,10 +193,10 @@ all rules against the single container related to the event signalled by the doc
 #### Authz plugin mode
 In this mode, Docker Enforcer runs as
 [docker authorization plugin](https://docs.docker.com/engine/extend/plugins_authorization/). As a result,
-your users won't even be able to complete an API call, that has parameters that don't validate with your
+your users won't even be able to complete an API call that has parameters that don't validate with your
 rules. In that case, an error message is returned to the user and the call is not executed by docker. This
-mode additionally allows you to use [request rules]() for low level auditing of API calls. This requires
-additional configuration of docker daemon, as below:
+mode additionally allows you to use [request rules](#filtering-docker-api-requests) for low level auditing
+of API calls. This requires additional configuration of docker daemon, as below:
 * You need to register your valid endpoint as docker plugin. To do this, create a file
 `/etc/docker/plugins/enforcer.spec` with this single line:
 ```
@@ -203,6 +209,11 @@ one) docker configuration file in `/etc/docker/daemon.json` and be sure it inclu
 "authorization-plugins": ["enforcer"]
 }
 ```
+* Using this creates a cyclic dependency between docker and docker enforcer running as a container (docker
+needs docker enforcer to authorize any API call, but docker enforcer needs docker to start as a container).
+To solve this problem, you need to
+[run Docker Enforcer as a system service](#running-enforcer-as-a-system-service-with-systemd), not docker
+container.
 
 ### Recommended mode setup for production hosts
 In production, you might want a setup, that allows you to test new compliance rules on a production system,
@@ -229,6 +240,37 @@ After the successful run, a simple web API will be exposed to show current rules
 You can access `http://localhost:8888/rules` to see the list of rules configured. This should be in sync
 with the rules file you passed to the container.
 
+### Running enforcer as a system service with systemd
+Please follow the following steps:
+* download docker enforcer from [the release page](https://github.com/piontec/docker-enforcer/releases)
+* extract it to some directory accessible only by system/docker admin (let's suppose `/opt/de`)
+* (optional, but recommended) create a python virtual environment for running the service
+* install python dependencies with `pip install -r requirements-prod.txt`
+* overwrite default `rules.py`, `triggers.py` and `request_rules.py` files with your custom rules
+* in the directory `/opt/de`, create a file named `environment.conf` and put there any required
+[configuration options](#configuration-options) formatted one option per line as `OPTION=value`
+* create service file for systemd as `/etc/systemd/system/docker_enforcer.service` using
+[this template](systemd/docker_enforcer.service). Be sure to adjust `DE_PATH` to your service location
+(`/opt/de` in our example) and `GUNICORN_PATH` to the place where `pip` installed `gunicorn` for you.
+* (recommended) let `docker.service` in systemd know, that now docker-enforcer is "wanted" to be
+running before docker starts. Create a directory `/etc/systemd/system/docker.service.d/` and a file
+`docker.conf` in it. Put this into `docker.conf` file:
+```
+[Unit]
+Wants=docker_enforcer.service
+```
+* reload service configuration in systemd
+```
+systemctl daemon-reload
+```
+* start docker enforcer
+```
+systemctl start docker_enforcer
+```
+* restart docker
+```
+systemctl restart docker
+```
 
 ## Accessing data about running docker enforcer container
 Docker enforcer exposes a simple HTTP API on the port 8888. If the "Accept:" header in client's request
@@ -241,7 +283,9 @@ run; makes sense only when "RUN_PERIODIC" is True
 - `/metrics` - exposes the number of containers stopped since launch in the
 [prometheus](https://prometheus.io/) data format,
 - `/config` - shows the current version and configuration options of the daemon
-- `/rules` - allows you to view the configured set of rules.
+- `/rules` - allows you to view the configured set of rules,
+- `/request_rules` - allows you to view the configured set of request rules,
+- `/triggers` - allows you to view the configured set of triggers.
   
 Additionally, for `/` and `/recent` endpoints, you can append the following options in the URL (like:
 `http://localhost:8888/?show_all_violated_rules=1&show_image_and_labels=1`):

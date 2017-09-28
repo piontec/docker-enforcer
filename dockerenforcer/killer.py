@@ -24,14 +24,16 @@ class Stat:
         self.image = None
         self.labels = None
         self.source = None
+        self.owner = None
 
-    def record_new(self, reasons, image, labels, source):
+    def record_new(self, reasons, image, labels, source, owner):
         self.counter += 1
         self.last_timestamp = datetime.datetime.utcnow()
         self.reasons = reasons
         self.image = image
         self.labels = labels
         self.source = source
+        self.owner = owner
 
     def __str__(self, *args, **kwargs):
         return "{0} - {1}".format(self.counter, self.last_timestamp)
@@ -43,16 +45,19 @@ class StatusDictionary:
         self._padlock = threading.Lock()
         self._killed_containers = killed_containers if killed_containers else {}
 
-    def register_killed(self, container, reasons):
+    def register_killed(self, verdict):
+        subject = verdict.subject
+        reasons = verdict.reasons
+        user = "[unknown]" if not hasattr(verdict.subject, "owner") else verdict.subject.owner
         with self._padlock:
-            name = container.params["Name"]
-            image = container.params["Config"]["Image"] \
-                if "Config" in container.params and "Image" in container.params["Config"] \
-                else container.params["Image"]
-            labels = container.params["Config"]["Labels"] if "Config" in container.params \
-                else container.params["Labels"]
-            self._killed_containers.setdefault(container.cid, Stat(name))\
-                .record_new(reasons, image, labels, container.check_source)
+            name = subject.params["Name"]
+            image = subject.params["Config"]["Image"] \
+                if "Config" in subject.params and "Image" in subject.params["Config"] \
+                else subject.params["Image"]
+            labels = subject.params["Config"]["Labels"] if "Config" in subject.params \
+                else subject.params["Labels"]
+            self._killed_containers.setdefault(subject.cid, Stat(name))\
+                .record_new(reasons, image, labels, subject.check_source, user)
 
     def copy(self):
         with self._padlock:
@@ -83,9 +88,9 @@ containers_stopped_total {0}
                 if show_all_violated_rules:
                     violated_rule = json.dumps(v.reasons)
 
-                str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": {2}, " \
+                str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": {2}, \"owner\": \"{6}\", " \
                             "\"source\": \"{3}\", \"count\": {4}, \"last_timestamp\": \"{5}\""\
-                    .format(k, v.name, violated_rule, v.source, v.counter, v.last_timestamp.isoformat())
+                    .format(k, v.name, violated_rule, v.source, v.counter, v.last_timestamp.isoformat(), v.owner)
 
                 if show_image_and_labels:
                     str_list += ', "image": "{0}", "labels": {1}'.format(v.image, json.dumps(v.labels))
@@ -111,39 +116,54 @@ class Judge:
         self._subject_type = subject_type
         self._rules = rules
         self._config = config
-        self._global_whitelist = []
-        self._per_rule_whitelist = {}
         self._whitelist_separator = ":"
-        self._load_whitelist_from_config()
+        self._load_whitelists_from_config()
 
     @staticmethod
     def _get_name_info(container):
         has_name = container.params and 'Name' in container.params
-        name = container.params['Name'][1:] if has_name else container.cid
+        if has_name:
+            name = container.params['Name'][1:] if container.params['Name'].startswith('/') \
+                else container.params['Name']
+        else:
+            name = container.cid
         return has_name, name
 
-    def _on_global_white_list(self, container):
+    def _on_global_whitelist(self, container):
         has_name, name = self._get_name_info(container)
-        on_list = has_name and any(rn.match(container.params['Name'][1:]) for rn in self._global_whitelist)
-
+        on_list = has_name and any(rn.match(name) for rn in self._global_whitelist)
         if on_list:
             logger.debug("Container {0} is on global white list (for all rules)".format(name))
-        return on_list
+            return True
+
+        image_name = container.params['Image']
+        on_list = any(rn.match(image_name) for rn in self._image_global_whitelist)
+        if on_list:
+            logger.debug("Container {0} is on global image white list (for all rules)".format(name))
+            return True
+        return False
 
     def _on_per_rule_whitelist(self, container, rule_name):
         has_name, name = self._get_name_info(container)
         on_list = has_name and rule_name in self._per_rule_whitelist \
-            and any(rn.match(container.params['Name'][1:]) for rn in self._per_rule_whitelist[rule_name])
-
+            and any(rn.match(name) for rn in self._per_rule_whitelist[rule_name])
         if on_list:
-            logger.debug("Container {0} is on white list for rule '{1}'".format(name, rule_name))
-        return on_list
+            logger.debug("Container {} is on per rule white list for rule '{}'".format(name, rule_name))
+            return True
+
+        image_name = container.params['Image']
+        on_list = rule_name in self._image_per_rule_whitelist \
+            and any(rn.match(image_name) for rn in self._image_per_rule_whitelist[rule_name])
+        if on_list:
+            logger.debug("Container {} is on image per rule white list for rule '{}'".format(name, rule_name))
+            return True
+        return False
 
     def should_be_killed(self, subject):
         if not subject:
             logger.warning("No {} details, skipping checks".format(self._subject_type))
             return Verdict(False, subject, None)
-        if self._run_whitelists and self._on_global_white_list(subject):
+        if self._run_whitelists and self._on_global_whitelist(subject):
             return Verdict(False, subject, None)
 
         reasons = []
@@ -163,16 +183,23 @@ class Judge:
         else:
             return Verdict(False, subject, None)
 
-    def _load_whitelist_from_config(self):
-        self._global_whitelist = [re.compile("^{0}$".format(r)) for r in self._config.white_list
-                                  if r.find(self._whitelist_separator) == -1]
-        per_rule = [s.split(self._whitelist_separator, 1) for s in self._config.white_list
+    def _load_whitelists_from_config(self):
+        self._global_whitelist, self._per_rule_whitelist = self._load_lists_pair_from_config(self._config.white_list)
+        self._image_global_whitelist, self._image_per_rule_whitelist = self._load_lists_pair_from_config(
+            self._config.image_white_list)
+
+    def _load_lists_pair_from_config(self, whitelist: str):
+        global_whitelist = [re.compile("^{0}$".format(r)) for r in whitelist
+                            if r.find(self._whitelist_separator) == -1]
+        per_rule = [s.split(self._whitelist_separator, 1) for s in whitelist
                     if s.find(self._whitelist_separator) > -1]
         grouped = itertools.groupby(sorted(per_rule, key=lambda p: p[1]), key=lambda p: p[1])
+        per_rule_whitelist = {}
         for pair in grouped:
             rule_name = pair[0]
             containers_names = [re.compile("^{0}$".format(n[0])) for n in list(pair[1])]
-            self._per_rule_whitelist[rule_name] = containers_names
+            per_rule_whitelist[rule_name] = containers_names
+        return global_whitelist, per_rule_whitelist
 
 
 class Killer(Observer):
@@ -201,7 +228,7 @@ class Killer(Observer):
         return self._status.copy()
 
     def register_kill(self, verdict):
-        self._status.register_killed(verdict.subject, verdict.reasons)
+        self._status.register_killed(verdict)
 
 
 class TriggerHandler(Observer):

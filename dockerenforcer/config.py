@@ -3,7 +3,7 @@ from json import JSONEncoder
 import os
 import copy
 
-version = "0.7.0"
+version = "0.8.0"
 
 
 class Mode(Enum):
@@ -19,6 +19,7 @@ class Config:
         self.docker_req_timeout_sec = int(os.getenv('DOCKER_REQ_TIMEOUT_S', '30'))
         self.docker_socket = os.getenv('DOCKER_SOCKET', 'unix:///var/run/docker.sock')
         self.white_list = os.getenv('WHITE_LIST', 'docker-enforcer,docker_enforcer').split(",")
+        self.image_white_list = os.getenv('IMAGE_WHITE_LIST', '').split(",")
         self.mode = Mode[os.getenv('MODE', 'WARN').lower().capitalize()]
         self.cache_params = bool(os.getenv('CACHE_PARAMS', 'True') == 'True')
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
