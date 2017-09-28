@@ -69,6 +69,7 @@ class ApiContainerTest(unittest.TestCase):
         self.assertTrue(ApiContainerTest.test_trigger_flag)
 
     def test_logs_correctly(self):
+        judge._rules = []
         with mock.patch.object(app.logger, 'info') as mock_info:
             self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_run_with_tls)
             self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run)
@@ -93,6 +94,20 @@ class ApiContainerTest(unittest.TestCase):
                             data=ApiTestHelper.authz_req_run_with_privileged_name_test)
         judge._image_global_whitelist = []
         self._check_response(res, True)
+
+    def test_killed_check_api_log(self):
+        judge._rules = [self.mem_rule]
+        res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run_with_tls)
+        self._check_response(res, False, "must have memory limit")
+        log = self.app.get('/')
+        int_json = json.loads(log.data.decode(log.charset))
+        self.assertEqual(len(int_json["detections"]), 1)
+        det = int_json["detections"][0]
+        self.assertEqual(det["id"], "<unnamed_container>")
+        self.assertEqual(det["name"], "<unnamed_container>")
+        self.assertEqual(det["source"], "authz_plugin")
+        self.assertEqual(det["violated_rule"], "must have memory limit")
+        self.assertEqual(det["owner"], "client")
 
 
 class ApiInfoTest(unittest.TestCase):

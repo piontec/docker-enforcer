@@ -213,7 +213,8 @@ def authz_request():
     if operation == "create" and "RequestBody" in json_data:
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
-        container = make_container_periodic_check_compatible(int_json, url)
+        tls_user = json_data["User"] if "User" in json_data and json_data["User"] != '' else "[unknown]"
+        container = make_container_periodic_check_compatible(int_json, url, tls_user)
         verdict = judge.should_be_killed(container)
         if verdict.verdict:
             return process_positive_verdict(verdict, json_data)
@@ -226,26 +227,27 @@ def log_authz_req(json_data):
                     .format(user_info, json_data["RequestMethod"], json_data["RequestUri"]))
 
 
-def make_container_periodic_check_compatible(cont_json, url):
+def make_container_periodic_check_compatible(cont_json, url, owner):
     url_params = parse.parse_qs(url.query)
     cont_json["Name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
     cont_json["Config"] = {}
     cont_json["Config"]["Labels"] = cont_json["Labels"]
     return Container(cont_json["Name"], params=cont_json, metrics={}, position=0,
-                     check_source=CheckSource.AuthzPlugin)
+                     check_source=CheckSource.AuthzPlugin, owner=owner)
 
 
 def process_positive_verdict(verdict, req, register=True):
-    enhanced_info = "." if not hasattr(verdict.subject, "params") else " on container {}.".format(
+    enhanced_info = "" if not hasattr(verdict.subject, "params") else " on container {}".format(
         verdict.subject.params["Name"])
+    user_name = "[unknown]" if not hasattr(verdict.subject, "owner") else verdict.subject.owner
     if config.mode == Mode.Warn:
-        app.logger.info("Authorization plugin detected rules violation for operation {}{}"
+        app.logger.info("Authorization plugin detected rules violation for operation {}{} for user {}."
                         "Running in WARN mode, so the request is allowed anyway. Broken rules: {}"
-                        .format(req["RequestUri"], enhanced_info, ", ".join(verdict.reasons)))
+                        .format(req["RequestUri"], enhanced_info, user_name, ", ".join(verdict.reasons)))
         reply = {"Allow": True}
     else:
-        app.logger.info("Authorization plugin denied operation {}{} Broken rules: {}"
-                        .format(req["RequestUri"], enhanced_info, ", ".join(verdict.reasons)))
+        app.logger.info("Authorization plugin denied operation {}{} for user {}. Broken rules: {}"
+                        .format(req["RequestUri"], enhanced_info, user_name, ", ".join(verdict.reasons)))
         reply = {"Allow": False, "Msg": ", ".join(verdict.reasons)}
 
     trigger_handler.on_next(verdict)

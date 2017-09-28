@@ -24,14 +24,16 @@ class Stat:
         self.image = None
         self.labels = None
         self.source = None
+        self.owner = None
 
-    def record_new(self, reasons, image, labels, source):
+    def record_new(self, reasons, image, labels, source, owner):
         self.counter += 1
         self.last_timestamp = datetime.datetime.utcnow()
         self.reasons = reasons
         self.image = image
         self.labels = labels
         self.source = source
+        self.owner = owner
 
     def __str__(self, *args, **kwargs):
         return "{0} - {1}".format(self.counter, self.last_timestamp)
@@ -43,16 +45,19 @@ class StatusDictionary:
         self._padlock = threading.Lock()
         self._killed_containers = killed_containers if killed_containers else {}
 
-    def register_killed(self, container, reasons):
+    def register_killed(self, verdict):
+        subject = verdict.subject
+        reasons = verdict.reasons
+        user = "[unknown]" if not hasattr(verdict.subject, "owner") else verdict.subject.owner
         with self._padlock:
-            name = container.params["Name"]
-            image = container.params["Config"]["Image"] \
-                if "Config" in container.params and "Image" in container.params["Config"] \
-                else container.params["Image"]
-            labels = container.params["Config"]["Labels"] if "Config" in container.params \
-                else container.params["Labels"]
-            self._killed_containers.setdefault(container.cid, Stat(name))\
-                .record_new(reasons, image, labels, container.check_source)
+            name = subject.params["Name"]
+            image = subject.params["Config"]["Image"] \
+                if "Config" in subject.params and "Image" in subject.params["Config"] \
+                else subject.params["Image"]
+            labels = subject.params["Config"]["Labels"] if "Config" in subject.params \
+                else subject.params["Labels"]
+            self._killed_containers.setdefault(subject.cid, Stat(name))\
+                .record_new(reasons, image, labels, subject.check_source, user)
 
     def copy(self):
         with self._padlock:
@@ -83,9 +88,9 @@ containers_stopped_total {0}
                 if show_all_violated_rules:
                     violated_rule = json.dumps(v.reasons)
 
-                str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": {2}, " \
+                str_list += "    {{\"id\": \"{0}\", \"name\": \"{1}\", \"violated_rule\": {2}, \"owner\": \"{6}\", " \
                             "\"source\": \"{3}\", \"count\": {4}, \"last_timestamp\": \"{5}\""\
-                    .format(k, v.name, violated_rule, v.source, v.counter, v.last_timestamp.isoformat())
+                    .format(k, v.name, violated_rule, v.source, v.counter, v.last_timestamp.isoformat(), v.owner)
 
                 if show_image_and_labels:
                     str_list += ', "image": "{0}", "labels": {1}'.format(v.image, json.dumps(v.labels))
@@ -223,7 +228,7 @@ class Killer(Observer):
         return self._status.copy()
 
     def register_kill(self, verdict):
-        self._status.register_killed(verdict.subject, verdict.reasons)
+        self._status.register_killed(verdict)
 
 
 class TriggerHandler(Observer):

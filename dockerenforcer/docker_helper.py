@@ -20,13 +20,14 @@ class CheckSource:
 
 
 class Container:
-    def __init__(self, cid, params, metrics, position, check_source):
+    def __init__(self, cid, params, metrics, position, check_source, owner="[unknown]"):
         super().__init__()
         self.check_source = check_source
         self.position = position
         self.metrics = metrics
         self.params = params
         self.cid = cid
+        self.owner = owner
 
     def __str__(self, *args, **kwargs):
         return self.params['Name'] if self.params['Name'] else self.cid
