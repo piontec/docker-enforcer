@@ -1,6 +1,7 @@
 import inspect
 import json
 import logging
+import re
 import signal
 import sys
 from base64 import b64decode
@@ -27,6 +28,7 @@ judge = Judge(rules, "container", config)
 requests_judge = Judge(request_rules, "request", config, run_whitelists=False)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
+containers_regex = re.compile("^(/v.+?)?/containers/.+?$")
 
 
 def create_app():
@@ -209,8 +211,9 @@ def authz_request():
     verdict = requests_judge.should_be_killed(json_data)
     if verdict.verdict:
         return process_positive_verdict(verdict, json_data, register=False)
+
     operation = url.path.split("/")[-1]
-    if operation == "create" and "RequestBody" in json_data:
+    if containers_regex.match(url.path) and operation == "create" and "RequestBody" in json_data:
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
         tls_user = json_data["User"] if "User" in json_data and json_data["User"] != '' else "[unknown]"
