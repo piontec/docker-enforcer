@@ -136,8 +136,9 @@ checking all the rules and have all the violations, not only the first one, logg
 - "LOG_AUTHZ_REQUESTS=False" - log all incoming docker API requests received in Authz mode. This logs
 username (if available - only when TLS auth is used), HTTP method and URI for each received authorization
 request. Of course, works only in Authz plugin mode.
-- "WHITE_LIST=docker-enforcer,docker.*,docker-enforcer:steal socket, docker*:steal socket" - comma
-separated list of white list definitions, where each definition can be:
+- "WHITE_LIST=docker-enforcer,docker_enforcer" - comma separated list of container name based white list
+definitions, which allow to define a whitelist based on a container name. Each definition can be (like in
+a sample value: "docker.*,docker-enforcer:steal socket,docker.*:steal socket"):
   - container name, like "docker-enforcer": this makes container named exactly "docker-enforcer" to be
   excluded from checks of all rules
   - container name regexp, like "docker.*": this makes any container which name matches regex "docker.*"
@@ -146,6 +147,10 @@ separated list of white list definitions, where each definition can be:
   "docker-enforcer" to be excluded from checking against the rule named "steal socket"
   - container name regexp and rule name, like "docker.*:steal socket": this makes any container which
   name matches regex "docker.*" to be excluded from checking against the rule named "steal socket"
+- "IMAGE_WHITE_LIST=''" - comma separated list of container image white list definitions, which allow to
+define a whitelist based on a name of docker image used to create the container. Each definition
+(like in a: "alpine.*,alpine:steal socket, alpine.*:steal socket") has the same syntax as in "WHITE_LIST"
+above.
 
 ### Running additional actions when a rule violation is detected
 When a violation is detected, docker enforcer logs information about it and stops the container (only
@@ -278,7 +283,9 @@ run; makes sense only when "RUN_PERIODIC" is True
 - `/metrics` - exposes the number of containers stopped since launch in the
 [prometheus](https://prometheus.io/) data format,
 - `/config` - shows the current version and configuration options of the daemon
-- `/rules` - allows you to view the configured set of rules.
+- `/rules` - allows you to view the configured set of rules,
+- `/request_rules` - allows you to view the configured set of request rules,
+- `/triggers` - allows you to view the configured set of triggers.
   
 Additionally, for `/` and `/recent` endpoints, you can append the following options in the URL (like:
 `http://localhost:8888/?show_all_violated_rules=1&show_image_and_labels=1`):

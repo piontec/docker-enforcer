@@ -117,17 +117,33 @@ def is_configured_event(e):
     return False
 
 
+def python_file_to_json(req, file_name: str):
+    try:
+        with open(file_name, "r") as file:
+            data = file.read()
+    except IOError as e:
+        data = "Error: {}".format(e.strerror)
+
+    if req.accept_mimetypes.accept_html:
+        html = highlight(data, Python3Lexer(), HtmlFormatter(full=True, linenos='table'))
+        return Response(html, content_type="text/html")
+    json_res = json.dumps(data, sort_keys=True, indent=4, separators=(',', ': '))
+    return Response(json_res, content_type="application/json")
+
+
 @app.route('/rules')
 def show_rules():
-    if request.accept_mimetypes.accept_html:
-        with open("rules/rules.py", "r") as file:
-            data = file.read()
-            html = highlight(data, Python3Lexer(), HtmlFormatter(full=True, linenos='table'))
-            return Response(html, content_type="text/html")
-    rules_txt = [{"name": d["name"], "rule": inspect.getsource(d["rule"]).strip().split(':', 1)[1].strip()} for d in
-                 rules]
-    data = json.dumps(rules_txt, sort_keys=True, indent=4, separators=(',', ': '))
-    return Response(data, content_type="application/json")
+    return python_file_to_json(request, "rules/rules.py")
+
+
+@app.route('/request_rules')
+def show_request_rules():
+    return python_file_to_json(request, "request_rules/request_rules.py")
+
+
+@app.route('/triggers')
+def show_triggers():
+    return python_file_to_json(request, "triggers/triggers.py")
 
 
 @app.route('/metrics')
@@ -200,7 +216,8 @@ def authz_request():
     if containers_regex.match(url.path) and operation == "create" and "RequestBody" in json_data:
         int_bytes = b64decode(json_data["RequestBody"])
         int_json = json.loads(int_bytes.decode(request.charset))
-        container = make_container_periodic_check_compatible(int_json, url)
+        tls_user = json_data["User"] if "User" in json_data and json_data["User"] != '' else "[unknown]"
+        container = make_container_periodic_check_compatible(int_json, url, tls_user)
         verdict = judge.should_be_killed(container)
         if verdict.verdict:
             return process_positive_verdict(verdict, json_data)
@@ -208,31 +225,32 @@ def authz_request():
 
 
 def log_authz_req(json_data):
-    user_info = json_data["User"] if 'UserAuthNMethod' in json_data else 'unauthorized'
+    user_info = json_data["User"] if 'UserAuthNMethod' in json_data else '[unknown]'
     app.logger.info("[AUTHZ_REQ] New auth request: user: {}, method: {}, uri: {}"
                     .format(user_info, json_data["RequestMethod"], json_data["RequestUri"]))
 
 
-def make_container_periodic_check_compatible(cont_json, url):
+def make_container_periodic_check_compatible(cont_json, url, owner):
     url_params = parse.parse_qs(url.query)
     cont_json["Name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
     cont_json["Config"] = {}
     cont_json["Config"]["Labels"] = cont_json["Labels"]
     return Container(cont_json["Name"], params=cont_json, metrics={}, position=0,
-                     check_source=CheckSource.AuthzPlugin)
+                     check_source=CheckSource.AuthzPlugin, owner=owner)
 
 
 def process_positive_verdict(verdict, req, register=True):
-    enhanced_info = "." if not hasattr(verdict.subject, "params") else " on container {}.".format(
+    enhanced_info = "" if not hasattr(verdict.subject, "params") else " on container {}".format(
         verdict.subject.params["Name"])
+    user_name = "[unknown]" if not hasattr(verdict.subject, "owner") else verdict.subject.owner
     if config.mode == Mode.Warn:
-        app.logger.info("Authorization plugin detected rules violation for operation {}{}"
+        app.logger.info("Authorization plugin detected rules violation for operation {}{} for user {}."
                         "Running in WARN mode, so the request is allowed anyway. Broken rules: {}"
-                        .format(req["RequestUri"], enhanced_info, ", ".join(verdict.reasons)))
+                        .format(req["RequestUri"], enhanced_info, user_name, ", ".join(verdict.reasons)))
         reply = {"Allow": True}
     else:
-        app.logger.info("Authorization plugin denied operation {}{} Broken rules: {}"
-                        .format(req["RequestUri"], enhanced_info, ", ".join(verdict.reasons)))
+        app.logger.info("Authorization plugin denied operation {}{} for user {}. Broken rules: {}"
+                        .format(req["RequestUri"], enhanced_info, user_name, ", ".join(verdict.reasons)))
         reply = {"Allow": False, "Msg": ", ".join(verdict.reasons)}
 
     trigger_handler.on_next(verdict)

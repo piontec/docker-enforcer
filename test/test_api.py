@@ -4,22 +4,28 @@ import unittest
 import re
 from unittest import mock
 
+from flask import Response
+
 from docker_enforcer import app, judge, config, requests_judge, trigger_handler
 from dockerenforcer.config import Mode
-from test.test_helpers import ApiTestHelper
+from test.test_helpers import ApiTestHelper, DefaultRulesHelper
 
 
-class ApiRequestFilterTest(unittest.TestCase):
+class ApiContainerTest(unittest.TestCase):
     mem_rule = {"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] == 0}
     cp_request_rule_regexp = re.compile("^/v1\.[23]\d/containers/test/archive$")
     cp_request_rule = {"name": "cp not allowed", "rule": lambda r, x=cp_request_rule_regexp:
                        r['RequestMethod'] in ['GET', 'HEAD'] and x.match(r['ParsedUri'].path)}
     test_trigger_flag = False
-    test_trigger = {"name": "set local flag", "trigger": lambda v: ApiRequestFilterTest.set_trigger_flag()}
+    test_trigger = {"name": "set local flag", "trigger": lambda v: ApiContainerTest.set_trigger_flag()}
+    forbid_privileged_rule = {
+           "name": "can't use privileged or cap-add without being on the whitelist",
+           "rule": lambda c: c.params["HostConfig"]["Privileged"] or c.params["HostConfig"]["CapAdd"] is not None
+       }
 
     @staticmethod
     def set_trigger_flag():
-        ApiRequestFilterTest.test_trigger_flag = True
+        ApiContainerTest.test_trigger_flag = True
 
     def setUp(self):
         config.mode = Mode.Kill
@@ -60,9 +66,10 @@ class ApiRequestFilterTest(unittest.TestCase):
         trigger_handler._triggers = [self.test_trigger]
         res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run)
         self._check_response(res, False, "must have memory limit")
-        self.assertTrue(ApiRequestFilterTest.test_trigger_flag)
+        self.assertTrue(ApiContainerTest.test_trigger_flag)
 
     def test_logs_correctly(self):
+        judge._rules = []
         with mock.patch.object(app.logger, 'info') as mock_info:
             self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_run_with_tls)
             self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run)
@@ -71,5 +78,70 @@ class ApiRequestFilterTest(unittest.TestCase):
                             and mock_info.call_args_list[0][0][0] ==
                             '[AUTHZ_REQ] New auth request: user: client, method: GET, uri: /v1.27/containers/json'
                             and mock_info.call_args_list[1][0][0] ==
-                            '[AUTHZ_REQ] New auth request: user: unauthorized, method: POST, '
+                            '[AUTHZ_REQ] New auth request: user: [unknown], method: POST, '
                             'uri: /v1.30/containers/create')
+
+    def test_violates_rules_but_on_whitelist(self):
+        judge._rules = [self.forbid_privileged_rule]
+        res = self.app.post('/AuthZPlugin.AuthZReq',
+                            data=ApiTestHelper.authz_req_run_with_privileged_name_docker_enforcer)
+        self._check_response(res, True)
+
+    def test_violates_rules_but_on_image_whitelist(self):
+        judge._rules = [self.forbid_privileged_rule]
+        judge._image_global_whitelist = [re.compile('^alpine$')]
+        res = self.app.post('/AuthZPlugin.AuthZReq',
+                            data=ApiTestHelper.authz_req_run_with_privileged_name_test)
+        judge._image_global_whitelist = []
+        self._check_response(res, True)
+
+    def test_killed_check_api_log(self):
+        judge._rules = [self.mem_rule]
+        res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run_with_tls)
+        self._check_response(res, False, "must have memory limit")
+        log = self.app.get('/')
+        int_json = json.loads(log.data.decode(log.charset))
+        self.assertEqual(len(int_json["detections"]), 1)
+        det = int_json["detections"][0]
+        self.assertEqual(det["id"], "<unnamed_container>")
+        self.assertEqual(det["name"], "<unnamed_container>")
+        self.assertEqual(det["source"], "authz_plugin")
+        self.assertEqual(det["violated_rule"], "must have memory limit")
+        self.assertEqual(det["owner"], "client")
+
+
+class ApiInfoTest(unittest.TestCase):
+    def setUp(self):
+        self.de = app
+        self.de.testing = True
+        self.app = self.de.test_client()
+
+    def _check_rules_response(self, res: Response, mime_type: str, data: bytearray=None):
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.content_type, mime_type)
+        if data is not None:
+            self.assertEqual(res.data, data)
+
+    def test_fetch_rules(self):
+        res = self.app.get('/rules')
+        self._check_rules_response(res, "application/json", DefaultRulesHelper.rules_json)
+
+    def test_fetch_rules_html(self):
+        res = self.app.get('/rules', headers={"Accept": "text/html"})
+        self._check_rules_response(res, "text/html")
+
+    def test_fetch_triggers(self):
+        res = self.app.get('/triggers')
+        self._check_rules_response(res, "application/json", DefaultRulesHelper.triggers_json)
+
+    def test_fetch_triggers_html(self):
+        res = self.app.get('/triggers', headers={"Accept": "text/html"})
+        self._check_rules_response(res, "text/html")
+
+    def test_fetch_request_rules(self):
+        res = self.app.get('/request_rules')
+        self._check_rules_response(res, "application/json", DefaultRulesHelper.request_rules)
+
+    def test_fetch_request_rules_html(self):
+        res = self.app.get('/request_rules', headers={"Accept": "text/html"})
+        self._check_rules_response(res, "text/html")
