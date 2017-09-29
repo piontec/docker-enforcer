@@ -71,6 +71,9 @@ class DockerHelper:
         except Exception as e:
             logger.error("Unexpected error when fetching info about container {0}: {1}".format(container_id, e))
             return None
+        if params is None or metrics is None:
+            logger.warning("Params or metrics were not fetched for container {}. Not returning container.".format(container_id))
+            return None
         return Container(container_id, params, metrics, 0, check_source)
 
     def check_containers(self, check_source):
