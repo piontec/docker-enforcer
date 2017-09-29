@@ -160,7 +160,7 @@ class Judge:
         return False
 
     def should_be_killed(self, subject):
-        if not subject:
+        if not subject or not hasattr(subject, "params"):
             logger.warning("No {} details, skipping checks".format(self._subject_type))
             return Verdict(False, subject, None)
         if self._run_whitelists and self._on_global_whitelist(subject):
