@@ -27,12 +27,20 @@ class ApiContainerTest(unittest.TestCase):
     def set_trigger_flag():
         ApiContainerTest.test_trigger_flag = True
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         config.mode = Mode.Kill
         config.log_authz_requests = True
-        self.de = app
-        self.de.testing = True
-        self.app = self.de.test_client()
+        cls.de = app
+        cls.de.testing = True
+        cls.app = cls.de.test_client()
+
+    def setUp(self):
+        judge._rules = []
+        judge._global_whitelist = []
+        judge._image_global_whitelist = []
+        judge._per_rule_whitelist = {}
+        judge._image_per_rule_whitelist = {}
 
     def _check_response(self, response, allow, msg=None, code=200):
         self.assertEqual(response.status_code, code)
@@ -69,7 +77,6 @@ class ApiContainerTest(unittest.TestCase):
         self.assertTrue(ApiContainerTest.test_trigger_flag)
 
     def test_logs_correctly(self):
-        judge._rules = []
         with mock.patch.object(app.logger, 'info') as mock_info:
             self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_run_with_tls)
             self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run)
@@ -83,6 +90,7 @@ class ApiContainerTest(unittest.TestCase):
 
     def test_violates_rules_but_on_whitelist(self):
         judge._rules = [self.forbid_privileged_rule]
+        judge._global_whitelist = [re.compile('^docker_enforcer$')]
         res = self.app.post('/AuthZPlugin.AuthZReq',
                             data=ApiTestHelper.authz_req_run_with_privileged_name_docker_enforcer)
         self._check_response(res, True)
@@ -92,7 +100,20 @@ class ApiContainerTest(unittest.TestCase):
         judge._image_global_whitelist = [re.compile('^alpine$')]
         res = self.app.post('/AuthZPlugin.AuthZReq',
                             data=ApiTestHelper.authz_req_run_with_privileged_name_test)
-        judge._image_global_whitelist = []
+        self._check_response(res, True)
+
+    def test_violates_rules_but_on_per_rule_regexp_whitelist(self):
+        judge._rules = [self.forbid_privileged_rule]
+        judge._per_rule_whitelist = {self.forbid_privileged_rule['name']: [re.compile('^docker_enf.*$')]}
+        res = self.app.post('/AuthZPlugin.AuthZReq',
+                            data=ApiTestHelper.authz_req_run_with_privileged_name_docker_enforcer)
+        self._check_response(res, True)
+
+    def test_violates_rules_but_on_per_rule_regexp_image_whitelist(self):
+        judge._rules = [self.forbid_privileged_rule]
+        judge._image_per_rule_whitelist = {self.forbid_privileged_rule['name']: [re.compile('^alp.*$')]}
+        res = self.app.post('/AuthZPlugin.AuthZReq',
+                            data=ApiTestHelper.authz_req_run_with_privileged_name_test)
         self._check_response(res, True)
 
     def test_killed_check_api_log(self):

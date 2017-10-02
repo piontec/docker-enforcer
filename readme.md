@@ -126,7 +126,8 @@ daemon.
 requests made to the docker daemon, but you can't use any rules that refer to `c.params` property
 - "DISABLE_METRICS=False" - disable container's metrics fetching; this decreases the number of requests
 made to the docker daemon (metrics fetching is quite heavy), but you can't use any rules that refer to
-`c.metrics` property
+`c.metrics` property when this is disabled; using metrics based rules requires running in
+[periodic mode](#periodic-mode)
 - "IMMEDIATE_PERIODICAL_START=False" - normally, when the enforcer is started in Periodic mode, it waits
 CHECK_INTERVAL_S seconds and just then starts the first check; if you want the check to start
 immediately after daemon startup - set this to True,
@@ -136,20 +137,20 @@ checking all the rules and have all the violations, not only the first one, logg
 - "LOG_AUTHZ_REQUESTS=False" - log all incoming docker API requests received in Authz mode. This logs
 username (if available - only when TLS auth is used), HTTP method and URI for each received authorization
 request. Of course, works only in Authz plugin mode.
-- "WHITE_LIST=docker-enforcer,docker_enforcer" - comma separated list of container name based white list
-definitions, which allow to define a whitelist based on a container name. Each definition can be (like in
-a sample value: "docker.*,docker-enforcer:steal socket,docker.*:steal socket"):
+- "WHITE_LIST=docker-enforcer,docker_enforcer" - pipe ('|') separated list of container name based white
+list definitions, which allow to define a whitelist based on a container name. Each definition can be
+(like in a sample value: "docker.\*,docker-enforcer|steal socket,docker.\*|steal socket"):
   - container name, like "docker-enforcer": this makes container named exactly "docker-enforcer" to be
   excluded from checks of all rules
-  - container name regexp, like "docker.*": this makes any container which name matches regex "docker.*"
+  - container name regexp, like "docker.\*": this makes any container which name matches regex "docker.\*"
   to be excluded from checks of all rules
-  - container and rule name, like "docker-enforcer:steal socket": this makes container named exactly
+  - container and rule name, like "docker-enforcer|steal socket": this makes container named exactly
   "docker-enforcer" to be excluded from checking against the rule named "steal socket"
-  - container name regexp and rule name, like "docker.*:steal socket": this makes any container which
-  name matches regex "docker.*" to be excluded from checking against the rule named "steal socket"
-- "IMAGE_WHITE_LIST=''" - comma separated list of container image white list definitions, which allow to
+  - container name regexp and rule name, like "docker.\*|steal socket": this makes any container which
+  name matches regex "docker.\*" to be excluded from checking against the rule named "steal socket"
+- "IMAGE_WHITE_LIST=''" - pipe ('|') separated list of container image white list definitions, which allow to
 define a whitelist based on a name of docker image used to create the container. Each definition
-(like in a: "alpine.*,alpine:steal socket, alpine.*:steal socket") has the same syntax as in "WHITE_LIST"
+(like in a: "alpine.\*,alpine|steal socket, alpine.\*|steal socket") has the same syntax as in "WHITE_LIST"
 above.
 
 ### Running additional actions when a rule violation is detected
