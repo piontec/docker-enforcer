@@ -15,10 +15,10 @@ REPO="docker-enforcer"
 
 print("Starting badge pre-commit hook...")
 
-BRANCH=str(subprocess.check_output(["git",
+BRANCH=subprocess.check_output(["git",
                                 "rev-parse",
                                 "--abbrev-ref",
-                                "HEAD"]).strip())
+                                "HEAD"]).decode().strip()
 
 FILE="readme.md"
 
