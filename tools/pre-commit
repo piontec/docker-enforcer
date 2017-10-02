@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """
 Referencing current branch in github readme.md[1]
 This pre-commit hook[2] updates the README.md file's
@@ -13,7 +13,7 @@ import subprocess
 GITHUB_USER="piontec"
 REPO="docker-enforcer"
 
-print "Starting badge pre-commit hook..."
+print("Starting badge pre-commit hook...")
 
 BRANCH=subprocess.check_output(["git",
                                 "rev-parse",
@@ -47,14 +47,14 @@ readmelines=open(FILE).readlines()
 with open(FILE, "w") as fh:
     for aline in readmelines:
         if travis_sentinal_str in aline and travis != aline:
-            print "Replacing:\n\t{}\nwith:\n\t{}".format(aline, travis)
+            print("Replacing:\n\t{}\nwith:\n\t{}".format(aline, travis))
             fh.write(travis)
         elif coverall_sentinal_str in aline and coverall != aline:
-            print "Replacing:\n\t{}\nwith:\n\t{}".format(aline, coverall)
+            print("Replacing:\n\t{}\nwith:\n\t{}".format(aline, coverall))
             fh.write(coverall)
         else:
             fh.write(aline)
 
 subprocess.check_output(["git", "add", "README.md" ])
 
-print "badge pre-commit hook complete."
+print("badge pre-commit hook complete.")
