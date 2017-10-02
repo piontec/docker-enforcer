@@ -15,10 +15,10 @@ REPO="docker-enforcer"
 
 print("Starting badge pre-commit hook...")
 
-BRANCH=subprocess.check_output(["git",
+BRANCH=str(subprocess.check_output(["git",
                                 "rev-parse",
                                 "--abbrev-ref",
-                                "HEAD"]).strip()
+                                "HEAD"]).strip())
 
 FILE="readme.md"
 
@@ -32,10 +32,10 @@ FILE="readme.md"
 # Output String with Variable substitution
 travis="[![Build Status](https://travis-ci.org/" \
        "{GITHUB_USER}/{REPO}.png?" \
-       "branch={BRANCH})](https://travis-ci.org/{GITHUB_USER}/{REPO})\n"
+       "branch={BRANCH})](https://travis-ci.org/{GITHUB_USER}/{REPO})\n" \
            .format(BRANCH=BRANCH, GITHUB_USER=GITHUB_USER, REPO=REPO)
 coverall="[![Coverage Status](https://coveralls.io/repos/github/" \
-         "{GITHUB_USER}/{REPO}/badge.svg?branch={BRANCH})](https://coveralls.io/github/{GITHUB_USER}/{REPO}?branch={BRANCH})\n"
+         "{GITHUB_USER}/{REPO}/badge.svg?branch={BRANCH})](https://coveralls.io/github/{GITHUB_USER}/{REPO}?branch={BRANCH})\n" \
              .format(BRANCH=BRANCH, GITHUB_USER=GITHUB_USER, REPO=REPO)
 
 
@@ -55,6 +55,6 @@ with open(FILE, "w") as fh:
         else:
             fh.write(aline)
 
-subprocess.check_output(["git", "add", "README.md" ])
+subprocess.check_output(["git", "add", FILE ])
 
 print("badge pre-commit hook complete.")
