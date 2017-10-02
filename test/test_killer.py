@@ -56,22 +56,42 @@ class WhitelistTests(TestsWithVerdicts):
     def test_killed_without_whitelist(self):
         self.assertTrue(RulesTestHelper(self.rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
 
-    def test_not_killed_on_whitelist_full_name(self):
+    def test_not_killed_on_whitelist_full_name_periodic(self):
         self.wl_config.white_list = ["testing_vro"]
         self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
                          .get_verdicts()[0].verdict)
 
-    def test_not_killed_on_whitelist_name_regex(self):
+    def test_not_killed_on_whitelist_name_regex_periodic(self):
         self.wl_config.white_list = ["testing_.*"]
         self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
                          .get_verdicts()[0].verdict)
 
-    def test_not_killed_on_whitelist_full_name_and_rule(self):
-        self.wl_config.white_list = ["testing_vro:must have CPU limit"]
+    def test_not_killed_on_whitelist_full_name_and_rule_periodic(self):
+        self.wl_config.white_list = ["testing_vro|must have CPU limit"]
         self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
                          .get_verdicts()[0].verdict)
 
-    def test_not_killed_on_whitelist_name_regex_and_rule(self):
-        self.wl_config.white_list = ["testing.*:must have CPU limit"]
+    def test_not_killed_on_whitelist_name_regex_and_rule_periodic(self):
+        self.wl_config.white_list = ["testing.*|must have CPU limit"]
+        self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
+                         .get_verdicts()[0].verdict)
+
+    def test_not_killed_on_image_whitelist_name_periodic(self):
+        self.wl_config.image_white_list = ["busybox"]
+        self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
+                         .get_verdicts()[0].verdict)
+
+    def test_not_killed_on_image_whitelist_name_regex_periodic(self):
+        self.wl_config.image_white_list = ["busy.*"]
+        self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
+                         .get_verdicts()[0].verdict)
+
+    def test_not_killed_on_image_whitelist_full_name_and_rule_periodic(self):
+        self.wl_config.image_white_list = ["busybox|must have CPU limit"]
+        self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
+                         .get_verdicts()[0].verdict)
+
+    def test_not_killed_on_image_whitelist_name_regex_and_rule_periodic(self):
+        self.wl_config.image_white_list = ["busy.*|must have CPU limit"]
         self.assertFalse(RulesTestHelper(self.rules, config=self.wl_config, cpu_period=0, cpu_quota=0)
                          .get_verdicts()[0].verdict)

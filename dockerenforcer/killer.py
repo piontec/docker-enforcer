@@ -116,7 +116,7 @@ class Judge:
         self._subject_type = subject_type
         self._rules = rules
         self._config = config
-        self._whitelist_separator = ":"
+        self._whitelist_separator = config.white_list_separator
         self._load_whitelists_from_config()
 
     @staticmethod
@@ -129,6 +129,11 @@ class Judge:
             name = container.cid
         return has_name, name
 
+    @staticmethod
+    def _get_image_info(container):
+        return container.params['Config']['Image'] if 'Image' in container.params['Config'] \
+            else container.params['Image']
+
     def _on_global_whitelist(self, container):
         has_name, name = self._get_name_info(container)
         on_list = has_name and any(rn.match(name) for rn in self._global_whitelist)
@@ -136,7 +141,7 @@ class Judge:
             logger.debug("Container {0} is on global white list (for all rules)".format(name))
             return True
 
-        image_name = container.params['Image']
+        image_name = self._get_image_info(container)
         on_list = any(rn.match(image_name) for rn in self._image_global_whitelist)
         if on_list:
             logger.debug("Container {0} is on global image white list (for all rules)".format(name))
@@ -151,7 +156,7 @@ class Judge:
             logger.debug("Container {} is on per rule white list for rule '{}'".format(name, rule_name))
             return True
 
-        image_name = container.params['Image']
+        image_name = self._get_image_info(container)
         on_list = rule_name in self._image_per_rule_whitelist \
             and any(rn.match(image_name) for rn in self._image_per_rule_whitelist[rule_name])
         if on_list:
