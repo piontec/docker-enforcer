@@ -1,6 +1,6 @@
 # docker enforcer
-[![Build Status](https://travis-ci.org/piontec/docker-enforcer.png?branch=master)](https://travis-ci.org/piontec/docker-enforcer)
-[![Coverage Status](https://coveralls.io/repos/github/piontec/docker-enforcer/badge.svg?branch=master)](https://coveralls.io/github/piontec/docker-enforcer?branch=master)
+[![Build Status](https://travis-ci.org/piontec/docker-enforcer.png?branch=feature/custom-whitelist)](https://travis-ci.org/piontec/docker-enforcer)
+[![Coverage Status](https://coveralls.io/repos/github/piontec/docker-enforcer/badge.svg?branch=feature/custom-whitelist)](https://coveralls.io/github/piontec/docker-enforcer?branch=feature/custom-whitelist)
 
 ## Why?
 Docker enforcer audits containers running on a shared docker host. The aim of docker enforcer is to

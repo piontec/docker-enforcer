@@ -21,10 +21,11 @@ from dockerenforcer.docker_helper import DockerHelper, Container, CheckSource
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 from request_rules.request_rules import request_rules
+from whitelist_rules.whitelist_rules import whitelist_rules
 
 config = Config()
 docker_helper = DockerHelper(config)
-judge = Judge(rules, "container", config)
+judge = Judge(rules, "container", config, run_whitelists=True, custom_whitelist_rules=whitelist_rules)
 requests_judge = Judge(request_rules, "request", config, run_whitelists=False)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
@@ -172,13 +173,17 @@ def show_filtered_stats(stats_filter):
     show_all_violated_rules = request.args.get('show_all_violated_rules') == '1'
     show_image_and_labels = request.args.get('show_image_and_labels') == '1'
 
-    data = '{{\n"last_full_check_run_timestamp_start": "{0}",\n' \
+    data = '{\n'
+    if config.run_periodic:
+        data += '"last_full_check_run_timestamp_start": "{0}",\n' \
            '"last_full_check_run_timestamp_end": "{1}",\n' \
-           '"last_full_check_run_time": "{2}",\n' \
-           '"detections":\n{3}\n}}'.format(
-        docker_helper.last_check_containers_run_start_timestamp,
-        docker_helper.last_check_containers_run_end_timestamp,
-        docker_helper.last_check_containers_run_time,
+           '"last_full_check_run_time": "{2}",\n'.format(
+            docker_helper.last_check_containers_run_start_timestamp,
+            docker_helper.last_check_containers_run_end_timestamp,
+            docker_helper.last_check_containers_run_time,
+            )
+
+    data += '"detections":\n{}\n}}'.format(
         jurek.get_stats().to_json_detail_stats(stats_filter, show_all_violated_rules, show_image_and_labels))
     return to_formatted_json(data)
 

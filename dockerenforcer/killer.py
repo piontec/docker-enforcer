@@ -110,8 +110,9 @@ class Verdict:
 
 
 class Judge:
-    def __init__(self, rules, subject_type, config, run_whitelists=True):
+    def __init__(self, rules, subject_type, config, run_whitelists=True, custom_whitelist_rules={}):
         super().__init__()
+        self._custom_whitelist_rules = custom_whitelist_rules
         self._run_whitelists = run_whitelists
         self._subject_type = subject_type
         self._rules = rules
@@ -164,11 +165,21 @@ class Judge:
             return True
         return False
 
+    def _on_custom_whitelist(self, subject):
+        for rule in self._custom_whitelist_rules:
+            try:
+                if rule['rule'](subject):
+                    return True
+            except Exception as e:
+                logger.warning("Exception while executing custom whitelist rule {}: class: {}, val: {}"
+                               .format(rule['name'], e.__class__.__name__, str(e)))
+        return False
+
     def should_be_killed(self, subject):
         if not subject:
             logger.warning("No {} details, skipping checks".format(self._subject_type))
             return Verdict(False, subject, None)
-        if self._run_whitelists and self._on_global_whitelist(subject):
+        if self._run_whitelists and (self._on_global_whitelist(subject) or self._on_custom_whitelist(subject)):
             return Verdict(False, subject, None)
 
         reasons = []

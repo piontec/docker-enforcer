@@ -41,6 +41,7 @@ class ApiContainerTest(unittest.TestCase):
         judge._image_global_whitelist = []
         judge._per_rule_whitelist = {}
         judge._image_per_rule_whitelist = {}
+        judge._custom_whitelist_rules = {}
 
     def _check_response(self, response, allow, msg=None, code=200):
         self.assertEqual(response.status_code, code)
