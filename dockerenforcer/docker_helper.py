@@ -3,6 +3,7 @@ import threading
 from json import JSONDecodeError
 
 import time
+from typing import Dict, Any, Iterable, Optional
 
 from docker import APIClient
 from docker.errors import NotFound
@@ -10,43 +11,47 @@ from flask import logging
 from requests import ReadTimeout
 from requests.packages.urllib3.exceptions import ProtocolError
 
+from dockerenforcer.config import Config
+
 logger = logging.getLogger("docker_enforcer")
 
 
 class CheckSource:
-    AuthzPlugin = "authz_plugin"
-    Periodic = "periodic"
-    Event = "event"
+    AuthzPlugin: str = "authz_plugin"
+    Periodic: str = "periodic"
+    Event: str = "event"
 
 
 class Container:
-    def __init__(self, cid, params, metrics, position, check_source, owner="[unknown]"):
+    def __init__(self, cid: str, params: Dict[str, Any], metrics: Dict[str, Any], position: int,
+                 check_source: CheckSource, owner: str="[unknown]") -> None:
         super().__init__()
-        self.check_source = check_source
-        self.position = position
-        self.metrics = metrics
-        self.params = params
-        self.cid = cid
-        self.owner = owner
+        self.params: Dict[str, Any] = params
+        self.check_source: CheckSource = check_source
+        self.position: int = position
+        self.metrics: Dict[str, Any] = metrics
+        self.cid: str = cid
+        self.owner: str = owner
 
-    def __str__(self, *args, **kwargs):
+    def __str__(self, *args, **kwargs) -> str:
         return self.params['Name'] if self.params['Name'] else self.cid
 
 
 class DockerHelper:
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__()
         self._padlock = threading.Lock()
-        self._check_in_progress = False
-        self._config = config
-        self._client = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
-        self._params_cache = {}
-        self.last_check_containers_run_end_timestamp = datetime.datetime.min
-        self.last_check_containers_run_start_timestamp = datetime.datetime.min
-        self.last_check_containers_run_time = datetime.timedelta.min
-        self.last_periodic_run_ok = False
+        self._check_in_progress: bool = False
+        self._config: Config = config
+        self._client: APIClient = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
+        self._params_cache: Dict[str, Any] = {}
+        self.last_check_containers_run_end_timestamp: datetime.datetime = datetime.datetime.min
+        self.last_check_containers_run_start_timestamp: datetime.datetime = datetime.datetime.min
+        self.last_check_containers_run_time: datetime.timedelta = datetime.timedelta.min
+        self.last_periodic_run_ok: bool = False
 
-    def check_container(self, container_id, check_source, remove_from_cache=False):
+    def check_container(self, container_id: str, check_source: CheckSource, remove_from_cache: bool=False) \
+            -> Optional[Container]:
         try:
             if remove_from_cache:
                 self.remove_from_cache(container_id)
@@ -72,11 +77,12 @@ class DockerHelper:
             logger.error("Unexpected error when fetching info about container {0}: {1}".format(container_id, e))
             return None
         if params is None or metrics is None:
-            logger.warning("Params or metrics were not fetched for container {}. Not returning container.".format(container_id))
+            logger.warning("Params or metrics were not fetched for container {}. Not returning container."
+                           .format(container_id))
             return None
         return Container(container_id, params, metrics, 0, check_source)
 
-    def check_containers(self, check_source):
+    def check_containers(self, check_source: CheckSource) -> Iterable[Container]:
         with self._padlock:
             if self._check_in_progress:
                 logger.warning("[{0}] Previous check did not yet complete, consider increasing CHECK_INTERVAL_S"
@@ -118,7 +124,7 @@ class DockerHelper:
         with self._padlock:
             self._check_in_progress = False
 
-    def get_params(self, container_id):
+    def get_params(self, container_id: str) -> Optional[Dict[str, Any]]:
         if self._config.cache_params and container_id in self._params_cache:
             logger.debug("Returning cached params for container {0}".format(container_id))
             return self._params_cache[container_id]
@@ -143,15 +149,15 @@ class DockerHelper:
         self._params_cache[container_id] = params
         return params
 
-    def purge_cache(self, running_container_ids):
+    def purge_cache(self, running_container_ids) -> None:
         diff = [c for c in self._params_cache.keys() if c not in running_container_ids]
         for cid in diff:
             self._params_cache.pop(cid, None)
 
-    def remove_from_cache(self, container_id):
+    def remove_from_cache(self, container_id: str) -> None:
         self._params_cache.pop(container_id, None)
 
-    def get_events_observable(self):
+    def get_events_observable(self) -> Iterable[Any]:
         successful = False
         ev = None
         while not successful:
@@ -166,7 +172,7 @@ class DockerHelper:
             successful = True
         return ev
 
-    def kill_container(self, container):
+    def kill_container(self, container: Container) -> None:
         try:
             self._client.stop(container.params['Id'])
         except (ReadTimeout, ProtocolError) as e:
