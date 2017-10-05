@@ -245,6 +245,7 @@ with the rules file you passed to the container.
 
 ### Running enforcer as a system service with systemd
 Please follow the following steps:
+* python at least 3.6+ is required
 * download docker enforcer from [the release page](https://github.com/piontec/docker-enforcer/releases)
 * extract it to some directory accessible only by system/docker admin (let's suppose `/opt/de`)
 * (optional, but recommended) create a python virtual environment for running the service
