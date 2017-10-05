@@ -15,13 +15,13 @@ class ApiContainerTest(unittest.TestCase):
     mem_rule = {"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] == 0}
     cp_request_rule_regexp = re.compile("^/v1\.[23]\d/containers/test/archive$")
     cp_request_rule = {"name": "cp not allowed", "rule": lambda r, x=cp_request_rule_regexp:
-                       r['RequestMethod'] in ['GET', 'HEAD'] and x.match(r['ParsedUri'].path)}
+    r['RequestMethod'] in ['GET', 'HEAD'] and x.match(r['ParsedUri'].path)}
     test_trigger_flag = False
     test_trigger = {"name": "set local flag", "trigger": lambda v: ApiContainerTest.set_trigger_flag()}
     forbid_privileged_rule = {
-           "name": "can't use privileged or cap-add without being on the whitelist",
-           "rule": lambda c: c.params["HostConfig"]["Privileged"] or c.params["HostConfig"]["CapAdd"] is not None
-       }
+        "name": "can't use privileged or cap-add without being on the whitelist",
+        "rule": lambda c: c.params["HostConfig"]["Privileged"] or c.params["HostConfig"]["CapAdd"] is not None
+    }
 
     @staticmethod
     def set_trigger_flag():
@@ -117,6 +117,18 @@ class ApiContainerTest(unittest.TestCase):
                             data=ApiTestHelper.authz_req_run_with_privileged_name_test)
         self._check_response(res, True)
 
+    def test_violates_rules_but_on_custom_whitelist(self):
+        judge._rules = [self.forbid_privileged_rule]
+        judge._custom_whitelist_rules = [{
+            "name": "name docker_enforcer and image alpine and rule forbid_privileged",
+            "rule": lambda c, r: c.params['Name'] == 'docker_enforcer'
+            and c.params['Image'] == 'alpine'
+            and r == self.forbid_privileged_rule['name']
+        }]
+        res = self.app.post('/AuthZPlugin.AuthZReq',
+                            data=ApiTestHelper.authz_req_run_with_privileged_name_docker_enforcer)
+        self._check_response(res, True)
+
     def test_killed_check_api_log(self):
         judge._rules = [self.mem_rule]
         res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run_with_tls)
@@ -138,7 +150,7 @@ class ApiInfoTest(unittest.TestCase):
         self.de.testing = True
         self.app = self.de.test_client()
 
-    def _check_rules_response(self, res: Response, mime_type: str, data: bytearray=None):
+    def _check_rules_response(self, res: Response, mime_type: str, data: bytearray = None):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.content_type, mime_type)
         if data is not None:

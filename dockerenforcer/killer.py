@@ -18,13 +18,14 @@ logger = logging.getLogger("docker_enforcer")
 
 Rule = Dict[str, Union[str, Callable[[Any], bool]]]
 Rules = Iterable[Rule]
+Subject = Union[Container, Dict[str, Any]]
 
 
 class Verdict:
-    def __init__(self, verdict: bool, container: Container, reasons: Optional[Iterable[str]]) -> None:
+    def __init__(self, verdict: bool, subject: Subject, reasons: Optional[Iterable[str]]) -> None:
         super().__init__()
         self.reasons: Iterable[str] = reasons
-        self.subject: Container = container
+        self.subject: Subject = subject
         self.verdict: bool = verdict
 
 
@@ -174,26 +175,27 @@ class Judge:
             return True
         return False
 
-    def _on_custom_whitelist(self, container: Container) -> bool:
+    def _on_custom_whitelist(self, container: Container, violated_rule_name: str) -> bool:
         for rule in self._custom_whitelist_rules:
             try:
-                if rule['rule'](container):
+                if rule['rule'](container, violated_rule_name):
                     return True
             except Exception as e:
                 logger.warning("Exception while executing custom whitelist rule {}: class: {}, val: {}"
                                .format(rule['name'], e.__class__.__name__, str(e)))
         return False
 
-    def should_be_killed(self, subject) -> Verdict:
+    def should_be_killed(self, subject: Subject) -> Verdict:
         if not subject:
             logger.warning("No {} details, skipping checks".format(self._subject_type))
             return Verdict(False, subject, None)
-        if self._run_whitelists and (self._on_global_whitelist(subject) or self._on_custom_whitelist(subject)):
+        if self._run_whitelists and self._on_global_whitelist(subject):
             return Verdict(False, subject, None)
 
         reasons = []
         for rule in self._rules:
-            if self._run_whitelists and self._on_per_rule_whitelist(subject, rule['name']):
+            if self._run_whitelists and (self._on_per_rule_whitelist(subject, rule['name'])
+                                         or self._on_custom_whitelist(subject, rule['name'])):
                 continue
             try:
                 if rule['rule'](subject):

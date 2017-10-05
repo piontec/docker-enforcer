@@ -1,6 +1,6 @@
 whitelist_rules = [
     {
         "name": "always false",
-        "rule": lambda c: False
+        "rule": lambda container, violated_rule_name: False
     }
 ]
