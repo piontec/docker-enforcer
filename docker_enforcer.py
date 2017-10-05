@@ -170,8 +170,8 @@ def show_config():
 
 
 def show_filtered_stats(stats_filter):
-    show_all_violated_rules = request.args.get('show_all_violated_rules') == '1'
-    show_image_and_labels = request.args.get('show_image_and_labels') == '1'
+    show_all_violated_rules: bool = request.args.get('show_all_violated_rules') == '1'
+    show_image_and_labels: bool = request.args.get('show_image_and_labels') == '1'
 
     data = '{\n'
     if config.run_periodic:

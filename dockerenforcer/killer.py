@@ -5,28 +5,43 @@ import re
 from copy import deepcopy
 
 import itertools
+from typing import Optional, Dict, Iterable, Callable, Any, Tuple, Union
+
 from flask import logging
 from rx import Observer
 
-from .config import Mode
+from dockerenforcer.docker_helper import CheckSource, Container, DockerHelper
+from .config import Mode, Config
 from triggers.triggers import triggers
 
 logger = logging.getLogger("docker_enforcer")
 
+Rule = Dict[str, Union[str, Callable[[Any], bool]]]
+Rules = Iterable[Rule]
+
+
+class Verdict:
+    def __init__(self, verdict: bool, container: Container, reasons: Optional[Iterable[str]]) -> None:
+        super().__init__()
+        self.reasons: Iterable[str] = reasons
+        self.subject: Container = container
+        self.verdict: bool = verdict
+
 
 class Stat:
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         super().__init__()
-        self.counter = 0
-        self.name = name
-        self.last_timestamp = None
-        self.reasons = None
-        self.image = None
-        self.labels = None
-        self.source = None
-        self.owner = None
+        self.counter: int = 0
+        self.name: str = name
+        self.last_timestamp: Optional[datetime.datetime] = None
+        self.reasons: Optional[Dict[str, str]] = None
+        self.image: Optional[str] = None
+        self.labels: Optional[Iterable[str]] = None
+        self.source: Optional[CheckSource] = None
+        self.owner: Optional[str] = None
 
-    def record_new(self, reasons, image, labels, source, owner):
+    def record_new(self, reasons: Iterable[str], image: str, labels: Optional[Iterable[str]],
+                   source: Optional[CheckSource], owner: str) -> None:
         self.counter += 1
         self.last_timestamp = datetime.datetime.utcnow()
         self.reasons = reasons
@@ -35,17 +50,17 @@ class Stat:
         self.source = source
         self.owner = owner
 
-    def __str__(self, *args, **kwargs):
+    def __str__(self, *args, **kwargs) -> str:
         return "{0} - {1}".format(self.counter, self.last_timestamp)
 
 
 class StatusDictionary:
-    def __init__(self, killed_containers=None):
+    def __init__(self, killed_containers=None) -> None:
         super().__init__()
         self._padlock = threading.Lock()
         self._killed_containers = killed_containers if killed_containers else {}
 
-    def register_killed(self, verdict):
+    def register_killed(self, verdict: Verdict) -> None:
         subject = verdict.subject
         reasons = verdict.reasons
         user = "[unknown]" if not hasattr(verdict.subject, "owner") else verdict.subject.owner
@@ -59,12 +74,12 @@ class StatusDictionary:
             self._killed_containers.setdefault(subject.cid, Stat(name))\
                 .record_new(reasons, image, labels, subject.check_source, user)
 
-    def copy(self):
+    def copy(self) -> 'StatusDictionary':
         with self._padlock:
             res = StatusDictionary(deepcopy(self._killed_containers))
         return res
 
-    def to_prometheus_stats_format(self):
+    def to_prometheus_stats_format(self) -> str:
         with self._padlock:
             res = """# HELP containers_stopped_total The total number of docker containers stopped.
 # TYPE containers_stopped_total counter
@@ -72,7 +87,8 @@ containers_stopped_total {0}
 """.format(len(self._killed_containers))
         return res
 
-    def to_json_detail_stats(self, output_filter, show_all_violated_rules, show_image_and_labels):
+    def to_json_detail_stats(self, output_filter: Callable[[Container], bool], show_all_violated_rules: bool,
+                             show_image_and_labels: bool) -> str:
         str_list = ""
         with self._padlock:
             is_first = True
@@ -101,27 +117,20 @@ containers_stopped_total {0}
         return self._killed_containers.items()
 
 
-class Verdict:
-    def __init__(self, verdict, container, reasons):
-        super().__init__()
-        self.reasons = reasons
-        self.subject = container
-        self.verdict = verdict
-
-
 class Judge:
-    def __init__(self, rules, subject_type, config, run_whitelists=True, custom_whitelist_rules={}):
+    def __init__(self, rules: Rules, subject_type: str, config: Config, run_whitelists: bool=True,
+                 custom_whitelist_rules: Rules={}):
         super().__init__()
         self._custom_whitelist_rules = custom_whitelist_rules
         self._run_whitelists = run_whitelists
         self._subject_type = subject_type
         self._rules = rules
         self._config = config
-        self._whitelist_separator = config.white_list_separator
+        self._whitelist_separator: str = config.white_list_separator
         self._load_whitelists_from_config()
 
     @staticmethod
-    def _get_name_info(container):
+    def _get_name_info(container: Container) -> Tuple[bool, str]:
         has_name = container.params and 'Name' in container.params
         if has_name:
             name = container.params['Name'][1:] if container.params['Name'].startswith('/') \
@@ -131,11 +140,11 @@ class Judge:
         return has_name, name
 
     @staticmethod
-    def _get_image_info(container):
+    def _get_image_info(container: Container) -> str:
         return container.params['Config']['Image'] if 'Image' in container.params['Config'] \
             else container.params['Image']
 
-    def _on_global_whitelist(self, container):
+    def _on_global_whitelist(self, container: Container) -> bool:
         has_name, name = self._get_name_info(container)
         on_list = has_name and any(rn.match(name) for rn in self._global_whitelist)
         if on_list:
@@ -149,7 +158,7 @@ class Judge:
             return True
         return False
 
-    def _on_per_rule_whitelist(self, container, rule_name):
+    def _on_per_rule_whitelist(self, container: Container, rule_name: str) -> bool:
         has_name, name = self._get_name_info(container)
         on_list = has_name and rule_name in self._per_rule_whitelist \
             and any(rn.match(name) for rn in self._per_rule_whitelist[rule_name])
@@ -165,17 +174,17 @@ class Judge:
             return True
         return False
 
-    def _on_custom_whitelist(self, subject):
+    def _on_custom_whitelist(self, container: Container) -> bool:
         for rule in self._custom_whitelist_rules:
             try:
-                if rule['rule'](subject):
+                if rule['rule'](container):
                     return True
             except Exception as e:
                 logger.warning("Exception while executing custom whitelist rule {}: class: {}, val: {}"
                                .format(rule['name'], e.__class__.__name__, str(e)))
         return False
 
-    def should_be_killed(self, subject):
+    def should_be_killed(self, subject) -> Verdict:
         if not subject:
             logger.warning("No {} details, skipping checks".format(self._subject_type))
             return Verdict(False, subject, None)
@@ -199,12 +208,12 @@ class Judge:
         else:
             return Verdict(False, subject, None)
 
-    def _load_whitelists_from_config(self):
+    def _load_whitelists_from_config(self) -> None:
         self._global_whitelist, self._per_rule_whitelist = self._load_lists_pair_from_config(self._config.white_list)
         self._image_global_whitelist, self._image_per_rule_whitelist = self._load_lists_pair_from_config(
             self._config.image_white_list)
 
-    def _load_lists_pair_from_config(self, whitelist: str):
+    def _load_lists_pair_from_config(self, whitelist: str) -> Tuple[Iterable[Any], Dict[str, Iterable[Any]]]:
         global_whitelist = [re.compile("^{0}$".format(r)) for r in whitelist
                             if r.find(self._whitelist_separator) == -1]
         per_rule = [s.split(self._whitelist_separator, 1) for s in whitelist
@@ -219,13 +228,13 @@ class Judge:
 
 
 class Killer(Observer):
-    def __init__(self, manager, mode):
+    def __init__(self, manager: DockerHelper, mode: Mode) -> None:
         super().__init__()
         self._mode = mode
         self._manager = manager
-        self._status = StatusDictionary()
+        self._status: StatusDictionary = StatusDictionary()
 
-    def on_next(self, verdict):
+    def on_next(self, verdict: Verdict) -> None:
         logger.info("Container {0} is detected to violate the rule \"{1}\". {2} the container [{3} mode]"
                     .format(verdict.subject, json.dumps(verdict.reasons),
                             "Not stopping" if self._mode == Mode.Warn else "Stopping", self._mode))
@@ -233,35 +242,35 @@ class Killer(Observer):
         if self._mode == Mode.Kill:
             self._manager.kill_container(verdict.subject)
 
-    def on_error(self, e):
+    def on_error(self, e: Exception) -> None:
         logger.warning("An error occurred while trying to check running containers")
         logger.exception(e)
 
-    def on_completed(self):
+    def on_completed(self) -> None:
         logger.error("This should never happen. Please contact the dev")
 
-    def get_stats(self):
+    def get_stats(self) -> StatusDictionary:
         return self._status.copy()
 
-    def register_kill(self, verdict):
+    def register_kill(self, verdict: Verdict):
         self._status.register_killed(verdict)
 
 
 class TriggerHandler(Observer):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._triggers = triggers
 
-    def on_next(self, verdict):
+    def on_next(self, verdict) -> None:
         for trigger in self._triggers:
             try:
                 trigger["trigger"](verdict)
             except Exception as e:
                 logger.error("During execution of trigger {0} exception was raised: {1}".format(trigger, e))
 
-    def on_error(self, e):
+    def on_error(self, e) -> None:
         logger.warning("An error occurred while waiting for detections")
         logger.exception(e)
 
-    def on_completed(self):
+    def on_completed(self) -> None:
         logger.error("This should never happen. Please contact the dev")

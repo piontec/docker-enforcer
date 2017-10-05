@@ -13,7 +13,7 @@ class Mode(Enum):
 
 
 class Config:
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.interval_sec: int = int(os.getenv('CHECK_INTERVAL_S', '600'))
         self.docker_req_timeout_sec: int = int(os.getenv('DOCKER_REQ_TIMEOUT_S', '30'))
