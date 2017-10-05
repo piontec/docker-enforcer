@@ -155,6 +155,15 @@ define a whitelist based on a name of docker image used to create the container.
 (like in a: "alpine.\*,alpine|steal socket, alpine.\*|steal socket") has the same syntax as in "WHITE_LIST"
 above.
 
+### Running custom code for whitelist evaluation
+If the above usage of `WHITE_LIST` and `IMAGE_WHITE_LIST` is still not elastic enough for your needs, you
+can implement your custom evaluation rules for the whitelist, like for [rules](#preparing-the-rules-file).
+This time, the evaluation lambda takes 2 arguments: `lambda container, violated_rule_name` and it must
+return `bool`. `container` is a full container info, like in `Rules[]`, while the 2nd argument provides
+the name of the violated rule. If any of custom whitelist lambdas returns `True`, the container won't be
+stopped.
+
+
 ### Running additional actions when a rule violation is detected
 When a violation is detected, docker enforcer logs information about it and stops the container (only
 in Kill mode). If you want to run some additional logic on this event, you can use a similar mechanism
