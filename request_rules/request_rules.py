@@ -8,6 +8,6 @@ logger = logging.getLogger("docker_enforcer")
 request_rules = [
     {
         "name": "always false",
-        "rule": lambda r: False
+        "rule": lambda request: False
     }
 ]

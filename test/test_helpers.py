@@ -120,6 +120,6 @@ class ApiTestHelper:
 
 
 class DefaultRulesHelper:
-    rules_json = b'"rules = [\\n    {\\n        \\"name\\": \\"always false\\",\\n        \\"rule\\": lambda c: False\\n    }\\n]\\n"'
+    rules_json = b'"rules = [\\n    {\\n        \\"name\\": \\"always false\\",\\n        \\"rule\\": lambda container: False\\n    }\\n]\\n"'
     triggers_json = b'"import json\\nimport threading\\n\\nfrom flask import logging\\n\\nlogger = logging.getLogger(\\"docker_enforcer\\")\\n\\ntriggers = [\\n    {\\n        \\"name\\": \\"additional log verdict\\",\\n        \\"trigger\\": lambda v: logger.debug(\\"[{0}] Trigger: container {1} is detected to violate the rule \\\\\\"{2}\\\\\\".\\"\\n                                          .format(threading.current_thread().name, v.subject, json.dumps(v.reasons)))\\n    }\\n]\\n"'
-    request_rules = b'"import json\\nimport threading\\n\\nfrom flask import logging\\n\\nlogger = logging.getLogger(\\"docker_enforcer\\")\\n\\nrequest_rules = [\\n    {\\n        \\"name\\": \\"always false\\",\\n        \\"rule\\": lambda r: False\\n    }\\n]\\n"'
+    request_rules = b'"import json\\nimport threading\\n\\nfrom flask import logging\\n\\nlogger = logging.getLogger(\\"docker_enforcer\\")\\n\\nrequest_rules = [\\n    {\\n        \\"name\\": \\"always false\\",\\n        \\"rule\\": lambda request: False\\n    }\\n]\\n"'
