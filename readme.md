@@ -1,6 +1,6 @@
 # docker enforcer
-[![Build Status](https://travis-ci.org/piontec/docker-enforcer.png?branch=feature/custom-whitelist)](https://travis-ci.org/piontec/docker-enforcer)
-[![Coverage Status](https://coveralls.io/repos/github/piontec/docker-enforcer/badge.svg?branch=feature/custom-whitelist)](https://coveralls.io/github/piontec/docker-enforcer?branch=feature/custom-whitelist)
+[![Build Status](https://travis-ci.org/piontec/docker-enforcer.png?branch=feature/bugfixes)](https://travis-ci.org/piontec/docker-enforcer)
+[![Coverage Status](https://coveralls.io/repos/github/piontec/docker-enforcer/badge.svg?branch=feature/bugfixes)](https://coveralls.io/github/piontec/docker-enforcer?branch=feature/bugfixes)
 
 ## Why?
 Docker enforcer audits containers running on a shared docker host. The aim of docker enforcer is to
@@ -10,6 +10,7 @@ stop containers running on a single host, but not obeying rules configured by th
 * [How - Configuring and Running](#how-configuring-and-running)
   * [Preparing the rules file](#preparing-the-rules-file)
   * [Configuration options](#configuration-options)
+  * [Running custom code for whitelist evaluation](running-custom-code-for-whitelist-evaluation)
   * [Running additional actions when a rule violation is detected](#running-additional-actions-when-a-rule-violation-is-detected)
   * [Filtering docker API requests](#filtering-docker-api-requests)
   * [Run modes](#run-modes)
@@ -139,6 +140,8 @@ checking all the rules and have all the violations, not only the first one, logg
 - "LOG_AUTHZ_REQUESTS=False" - log all incoming docker API requests received in Authz mode. This logs
 username (if available - only when TLS auth is used), HTTP method and URI for each received authorization
 request. Of course, works only in Authz plugin mode.
+- "DEFAULT_ACTION_ALLOW=True" - if any request is malformed and can't be parsed and evaluated, docker
+enforcer allows this request if set to `True` and denies when `False`
 - "WHITE_LIST=docker-enforcer,docker_enforcer" - pipe ('|') separated list of container name based white
 list definitions, which allow to define a whitelist based on a container name. Each definition can be
 (like in a sample value: "docker.\*,docker-enforcer|steal socket,docker.\*|steal socket"):
