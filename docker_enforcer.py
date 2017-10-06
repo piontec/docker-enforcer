@@ -208,8 +208,13 @@ def authz_response():
 @app.route("/AuthZPlugin.AuthZReq", methods=['POST'])
 def authz_request():
     app.logger.debug("New AuthZ Request: {}".format(request.data))
-    json_data = json.loads(request.data.decode(request.charset))
-    url = parse.urlparse(json_data["RequestUri"])
+    try:
+        json_data = json.loads(request.data.decode(request.charset))
+        url = parse.urlparse(json_data["RequestUri"])
+    except Exception as e:
+        app.logger.error("Error while trying to parse incoming message, resolving to default action. Error was: {}"
+                         .format(e))
+        return get_default_response()
     json_data["ParsedUri"] = url
     if config.log_authz_requests:
         log_authz_req(json_data)
@@ -227,6 +232,11 @@ def authz_request():
         if verdict.verdict:
             return process_positive_verdict(verdict, json_data)
     return to_formatted_json(json.dumps({"Allow": True}))
+
+
+def get_default_response():
+    resp = {"Allow": True} if config.default_allow else {"Allow": False, "Msg": "Denied as default action"}
+    return to_formatted_json(json.dumps(resp))
 
 
 def log_authz_req(json_data):

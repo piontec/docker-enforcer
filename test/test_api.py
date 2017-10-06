@@ -143,6 +143,26 @@ class ApiContainerTest(unittest.TestCase):
         self.assertEqual(det["violated_rule"], "must have memory limit")
         self.assertEqual(det["owner"], "client")
 
+    def test_handles_empty_when_default_action_accept(self):
+        config.default_allow = True
+        res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_empty)
+        self._check_response(res, True)
+
+    def test_handles_empty_when_default_action_deny(self):
+        config.default_allow = False
+        res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_empty)
+        self._check_response(res, False, "Denied as default action")
+
+    def test_handles_malformed_when_default_action_accept(self):
+        config.default_allow = True
+        res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_malformed)
+        self._check_response(res, True)
+
+    def test_handles_malformed_when_default_action_deny(self):
+        config.default_allow = False
+        res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_malformed)
+        self._check_response(res, False, "Denied as default action")
+
 
 class ApiInfoTest(unittest.TestCase):
     def setUp(self):
