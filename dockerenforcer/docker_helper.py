@@ -38,12 +38,12 @@ class Container:
 
 
 class DockerHelper:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, client: APIClient) -> None:
         super().__init__()
         self._padlock = threading.Lock()
         self._check_in_progress: bool = False
         self._config: Config = config
-        self._client: APIClient = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
+        self._client: APIClient = client
         self._params_cache: Dict[str, Any] = {}
         self.last_check_containers_run_end_timestamp: datetime.datetime = datetime.datetime.min
         self.last_check_containers_run_start_timestamp: datetime.datetime = datetime.datetime.min
