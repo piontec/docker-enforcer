@@ -70,6 +70,8 @@ class DockerHelperTests(unittest.TestCase):
         self._client.containers.return_value = [{'Id': self._cid}, {'Id': self._cid2}]
         self._client.inspect_container.side_effect = [self._params, self._params2]
         containers = list(self._helper.check_containers(CheckSource.Periodic))
+        self._client.containers.assert_called_once_with(quiet=True)
+        self._client.inspect_container.side_effect = [self._params, self._params2]
         self.assertEqual(len(containers), 2)
         self.assertEqual(containers[0].cid, self._cid)
         self.assertEqual(containers[0].check_source, CheckSource.Periodic)
@@ -77,3 +79,15 @@ class DockerHelperTests(unittest.TestCase):
         self.assertEqual(containers[1].cid, self._cid2)
         self.assertEqual(containers[1].check_source, CheckSource.Periodic)
         self.assertDictEqual(containers[1].params, self._params2)
+
+    def test_get_events(self):
+        res = [
+            {u'from': u'image/with:tag', u'id': self._cid, u'status': u'start', u'time': 1423339459},
+            {u'from': u'image/with:tag', u'id': self._cid2, u'status': u'start', u'time': 1423339459}
+            ]
+        self._client.events.return_value = res
+        events = list(self._helper.get_events_observable())
+        self._client.events.assert_called_once_with(decode=True)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]['id'], self._cid)
+        self.assertEqual(events[1]['id'], self._cid2)
