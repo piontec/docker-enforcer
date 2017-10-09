@@ -22,17 +22,58 @@ class DockerHelperTests(unittest.TestCase):
         self._config = Config()
         self._client = create_autospec(docker.APIClient)
         self._helper = DockerHelper(self._config, self._client)
+        self._cid = "cont_id1"
+        self._cid2 = "cont_id2"
+        self._params = {"Id": self._cid, "param1": "1"}
+        self._params2 = {"Id": self._cid2, "param1": "2"}
 
     def test_kill_container(self):
-        cid = "cont_id1"
-        c = Container("cid1", {"Id": cid}, {}, 0, CheckSource.Periodic)
+        c = Container(self._cid, params=self._params, metrics={}, position=0, check_source=CheckSource.Periodic)
         self._helper.kill_container(c)
-        self._client.stop.assert_called_once_with(cid)
+        self._client.stop.assert_called_once_with(self._cid)
 
     def test_get_params_no_cache(self):
-        cid = "cont_id1"
-        exp_params = {"param1": "1"}
-        self._client.inspect_container.return_value = exp_params
-        params = self._helper.get_params(cid)
-        self._client.inspect_container.assert_called_once_with(cid)
-        self.assertDictEqual(params, exp_params)
+        self._client.inspect_container.return_value = self._params
+        params = self._helper.get_params(self._cid)
+        self._client.inspect_container.assert_called_once_with(self._cid)
+        self.assertDictEqual(params, self._params)
+
+    def test_get_params_fill_cache(self):
+        self._config.cache_params = True
+        self._client.inspect_container.return_value = self._params
+        params = self._helper.get_params(self._cid)
+        self._client.inspect_container.assert_called_once_with(self._cid)
+        self.assertDictEqual(params, self._params)
+        self.assertDictEqual(self._helper._params_cache[self._cid], self._params)
+
+    def test_get_params_from_cache_and_remove(self):
+        self._config.cache_params = True
+        self._helper._params_cache[self._cid] = self._params
+        params = self._helper.get_params(self._cid)
+        self._client.inspect_container.assert_not_called()
+        self.assertDictEqual(params, self._params)
+        self.assertDictEqual(self._helper._params_cache[self._cid], self._params)
+        # now try to remove cached params
+        self._helper.remove_from_cache(self._cid)
+        self.assertFalse(self._cid in self._helper._params_cache)
+
+    def test_purge_cache(self):
+        self._config.cache_params = True
+        self._helper._params_cache[self._cid] = self._params
+        self._helper._params_cache[self._cid2] = self._params2
+        self._client.inspect_container.assert_not_called()
+        self._helper.purge_cache([self._cid])
+        self.assertFalse(self._cid2 in self._helper._params_cache)
+
+    def test_check_containers(self):
+        self._config.disable_metrics = True
+        self._client.containers.return_value = [{'Id': self._cid}, {'Id': self._cid2}]
+        self._client.inspect_container.side_effect = [self._params, self._params2]
+        containers = list(self._helper.check_containers(CheckSource.Periodic))
+        self.assertEqual(len(containers), 2)
+        self.assertEqual(containers[0].cid, self._cid)
+        self.assertEqual(containers[0].check_source, CheckSource.Periodic)
+        self.assertDictEqual(containers[0].params, self._params)
+        self.assertEqual(containers[1].cid, self._cid2)
+        self.assertEqual(containers[1].check_source, CheckSource.Periodic)
+        self.assertDictEqual(containers[1].params, self._params2)

@@ -142,6 +142,7 @@ class DockerHelper:
             logger.error("Unexpected error when fetching params for container {0}: {1}".format(container_id, e))
             return {}
         logger.debug("[{0}] Params fetched for {1}".format(threading.current_thread().name, container_id))
+
         if not self._config.cache_params:
             return params
 
