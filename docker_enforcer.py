@@ -7,6 +7,7 @@ import sys
 from base64 import b64decode
 from logging import StreamHandler
 
+from docker import APIClient
 from flask import Flask, Response, request
 from pygments import highlight
 from pygments.formatters.html import HtmlFormatter
@@ -24,7 +25,8 @@ from request_rules.request_rules import request_rules
 from whitelist_rules.whitelist_rules import whitelist_rules
 
 config = Config()
-docker_helper = DockerHelper(config)
+client: APIClient = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
+docker_helper = DockerHelper(config, client)
 judge = Judge(rules, "container", config, run_whitelists=True, custom_whitelist_rules=whitelist_rules)
 requests_judge = Judge(request_rules, "request", config, run_whitelists=False)
 jurek = Killer(docker_helper, config.mode)

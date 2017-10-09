@@ -38,12 +38,12 @@ class Container:
 
 
 class DockerHelper:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, client: APIClient) -> None:
         super().__init__()
         self._padlock = threading.Lock()
         self._check_in_progress: bool = False
         self._config: Config = config
-        self._client: APIClient = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
+        self._client: APIClient = client
         self._params_cache: Dict[str, Any] = {}
         self.last_check_containers_run_end_timestamp: datetime.datetime = datetime.datetime.min
         self.last_check_containers_run_start_timestamp: datetime.datetime = datetime.datetime.min
@@ -142,6 +142,7 @@ class DockerHelper:
             logger.error("Unexpected error when fetching params for container {0}: {1}".format(container_id, e))
             return {}
         logger.debug("[{0}] Params fetched for {1}".format(threading.current_thread().name, container_id))
+
         if not self._config.cache_params:
             return params
 
