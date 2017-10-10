@@ -251,7 +251,7 @@ def make_container_periodic_check_compatible(cont_json, url, owner):
     url_params = parse.parse_qs(url.query)
     cont_json["Name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
     cont_json["Config"] = {}
-    cont_json["Config"]["Labels"] = cont_json["Labels"]
+    cont_json["Config"]["Labels"] = cont_json.get("Labels", [])
     return Container(cont_json["Name"], params=cont_json, metrics={}, position=0,
                      check_source=CheckSource.AuthzPlugin, owner=owner)
 
