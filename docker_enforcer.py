@@ -252,9 +252,10 @@ def log_authz_req(json_data):
 def make_container_periodic_check_compatible(cont_json, url, owner):
     url_params = parse.parse_qs(url.query)
     cont_json["name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
+    cont_json = docker_helper.rename_keys_to_lower(cont_json)
     cont_json["config"] = {}
     cont_json["config"]["labels"] = cont_json.get("labels", [])
-    cont_json = docker_helper.rename_keys_to_lower(cont_json)
+    cont_json["hostconfig"] = {} if "hostconfig" not in cont_json else cont_json["hostconfig"]
     return Container(cont_json["name"], params=cont_json, metrics={}, position=0,
                      check_source=CheckSource.AuthzPlugin, owner=owner)
 
