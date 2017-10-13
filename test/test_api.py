@@ -22,6 +22,11 @@ class ApiContainerTest(unittest.TestCase):
         "name": "can't use privileged or cap-add without being on the whitelist",
         "rule": lambda c: c.params["hostconfig"]["privileged"] or c.params["hostConfig"]["capadd"] is not None
     }
+    forbid_privileged_with_check_hostconfig_rule = {
+        "name": "can't use privileged without being on the whitelist",
+        "rule": lambda c: "Privileged" in c.params["HostConfig"]
+                          and c.params["HostConfig"]["Privileged"] is not None
+    }
 
     @staticmethod
     def set_trigger_flag():
@@ -58,6 +63,11 @@ class ApiContainerTest(unittest.TestCase):
     def test_rule_ok_run_with_mem_check(self):
         judge._rules = [self.mem_rule]
         res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_plain_run_mem_limit)
+        self._check_response(res, True)
+
+    def test_rule_ok_when_only_image_in_request(self):
+        judge._rules = [self.forbid_privileged_with_check_hostconfig_rule]
+        res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_create_with_only_image)
         self._check_response(res, True)
 
     def test_request_rule_no_cp_from(self):
