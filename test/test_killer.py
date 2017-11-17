@@ -27,14 +27,14 @@ class ParamsRulesTests(TestsWithVerdicts):
         self.assert_verdicts([(3, False), (2, True)], verdicts)
 
     def test_must_have_memory_limit(self):
-        rules = [{"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] == 0}]
+        rules = [{"name": "must have memory limit", "rule": lambda c: c.params['hostconfig']['memory'] == 0}]
         self.assertFalse(RulesTestHelper(rules, mem_limit=1024).get_verdicts()[0].verdict)
         self.assertTrue(RulesTestHelper(rules, mem_limit=0).get_verdicts()[0].verdict)
 
     def test_must_have_cpu_quota(self):
         rules = [{"name": "must have CPU limit",
-                  "rule": lambda c: c.params['HostConfig']['CpuQuota'] == 0
-                  and c.params['HostConfig']['CpuPeriod'] == 0}]
+                  "rule": lambda c: c.params['hostconfig']['cpuquota'] == 0
+                  and c.params['hostconfig']['cpuperiod'] == 0}]
         self.assertFalse(RulesTestHelper(rules, cpu_period=50000, cpu_quota=50000).get_verdicts()[0].verdict)
         self.assertTrue(RulesTestHelper(rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
 

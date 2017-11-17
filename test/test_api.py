@@ -12,15 +12,15 @@ from test.test_helpers import ApiTestHelper, DefaultRulesHelper
 
 
 class ApiContainerTest(unittest.TestCase):
-    mem_rule = {"name": "must have memory limit", "rule": lambda c: c.params['HostConfig']['Memory'] == 0}
+    mem_rule = {"name": "must have memory limit", "rule": lambda c: c.params['hostconfig']['memory'] == 0}
     cp_request_rule_regexp = re.compile("^/v1\.[23]\d/containers/test/archive$")
     cp_request_rule = {"name": "cp not allowed", "rule": lambda r, x=cp_request_rule_regexp:
-                       r['RequestMethod'] in ['GET', 'HEAD'] and x.match(r['ParsedUri'].path)}
+                       r['requestmethod'] in ['GET', 'HEAD'] and x.match(r['parseduri'].path)}
     test_trigger_flag = False
     test_trigger = {"name": "set local flag", "trigger": lambda v: ApiContainerTest.set_trigger_flag()}
     forbid_privileged_rule = {
         "name": "can't use privileged or cap-add without being on the whitelist",
-        "rule": lambda c: c.params["HostConfig"]["Privileged"] or c.params["HostConfig"]["CapAdd"] is not None
+        "rule": lambda c: c.params["hostconfig"]["privileged"] or c.params["hostConfig"]["capadd"] is not None
     }
 
     @staticmethod
@@ -121,8 +121,8 @@ class ApiContainerTest(unittest.TestCase):
         judge._rules = [self.forbid_privileged_rule]
         judge._custom_whitelist_rules = [{
             "name": "name docker_enforcer and image alpine and rule forbid_privileged",
-            "rule": lambda c, r: c.params['Name'] == 'docker_enforcer'
-            and c.params['Image'] == 'alpine'
+            "rule": lambda c, r: c.params['name'] == 'docker_enforcer'
+            and c.params['image'] == 'alpine'
             and r == self.forbid_privileged_rule['name']
         }]
         res = self.app.post('/AuthZPlugin.AuthZReq',
