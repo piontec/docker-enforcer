@@ -212,12 +212,13 @@ def authz_request():
     app.logger.debug("New AuthZ Request: {}".format(request.data))
     try:
         json_data = json.loads(request.data.decode(request.charset))
-        url = parse.urlparse(json_data["RequestUri"])
+        json_data = docker_helper.rename_keys_to_lower(json_data)
+        url = parse.urlparse(json_data["requesturi"])
     except Exception as e:
         app.logger.error("Error while trying to parse incoming message, resolving to default action. Error was: {}"
                          .format(e))
         return get_default_response()
-    json_data["ParsedUri"] = url
+    json_data["parseduri"] = url
     if config.log_authz_requests:
         log_authz_req(json_data)
     verdict = requests_judge.should_be_killed(json_data)
@@ -225,10 +226,11 @@ def authz_request():
         return process_positive_verdict(verdict, json_data, register=False)
 
     operation = url.path.split("/")[-1]
-    if containers_regex.match(url.path) and operation == "create" and "RequestBody" in json_data:
-        int_bytes = b64decode(json_data["RequestBody"])
+    if containers_regex.match(url.path) and operation == "create" and "requestbody" in json_data:
+        int_bytes = b64decode(json_data["requestbody"])
         int_json = json.loads(int_bytes.decode(request.charset))
-        tls_user = json_data["User"] if "User" in json_data and json_data["User"] != '' else "[unknown]"
+        tls_user = json_data["user"] if "user" in json_data and json_data["user"] != '' else "[unknown]"
+        int_json = docker_helper.rename_keys_to_lower(int_json)
         container = make_container_periodic_check_compatible(int_json, url, tls_user)
         verdict = judge.should_be_killed(container)
         if verdict.verdict:
@@ -242,32 +244,33 @@ def get_default_response():
 
 
 def log_authz_req(json_data):
-    user_info = json_data["User"] if 'UserAuthNMethod' in json_data else '[unknown]'
+    user_info = json_data["user"] if 'userauthnmethod' in json_data else '[unknown]'
     app.logger.info("[AUTHZ_REQ] New auth request: user: {}, method: {}, uri: {}"
-                    .format(user_info, json_data["RequestMethod"], json_data["RequestUri"]))
+                    .format(user_info, json_data["requestmethod"], json_data["requesturi"]))
 
 
 def make_container_periodic_check_compatible(cont_json, url, owner):
     url_params = parse.parse_qs(url.query)
-    cont_json["Name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
-    cont_json["Config"] = {}
-    cont_json["Config"]["Labels"] = cont_json.get("Labels", [])
-    return Container(cont_json["Name"], params=cont_json, metrics={}, position=0,
+    cont_json["name"] = "<unnamed_container>" if "name" not in url_params else url_params["name"][0]
+    cont_json["config"] = {}
+    cont_json["config"]["labels"] = cont_json.get("labels", [])
+    cont_json = docker_helper.rename_keys_to_lower(cont_json)
+    return Container(cont_json["name"], params=cont_json, metrics={}, position=0,
                      check_source=CheckSource.AuthzPlugin, owner=owner)
 
 
 def process_positive_verdict(verdict, req, register=True):
     enhanced_info = "" if not hasattr(verdict.subject, "params") else " on container {}".format(
-        verdict.subject.params["Name"])
+        verdict.subject.params["name"])
     user_name = "[unknown]" if not hasattr(verdict.subject, "owner") else verdict.subject.owner
     if config.mode == Mode.Warn:
         app.logger.info("Authorization plugin detected rules violation for operation {}{} for user {}."
                         "Running in WARN mode, so the request is allowed anyway. Broken rules: {}"
-                        .format(req["RequestUri"], enhanced_info, user_name, ", ".join(verdict.reasons)))
+                        .format(req["requesturi"], enhanced_info, user_name, ", ".join(verdict.reasons)))
         reply = {"Allow": True}
     else:
         app.logger.info("Authorization plugin denied operation {}{} for user {}. Broken rules: {}"
-                        .format(req["RequestUri"], enhanced_info, user_name, ", ".join(verdict.reasons)))
+                        .format(req["requesturi"], enhanced_info, user_name, ", ".join(verdict.reasons)))
         reply = {"Allow": False, "Msg": ", ".join(verdict.reasons)}
 
     trigger_handler.on_next(verdict)

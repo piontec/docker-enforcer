@@ -66,12 +66,12 @@ class StatusDictionary:
         reasons = verdict.reasons
         user = "[unknown]" if not hasattr(verdict.subject, "owner") else verdict.subject.owner
         with self._padlock:
-            name = subject.params["Name"]
-            image = subject.params["Config"]["Image"] \
-                if "Config" in subject.params and "Image" in subject.params["Config"] \
-                else subject.params["Image"]
-            labels = subject.params["Config"]["Labels"] if "Config" in subject.params \
-                else subject.params["Labels"]
+            name = subject.params["name"]
+            image = subject.params["config"]["image"] \
+                if "Config" in subject.params and "image" in subject.params["config"] \
+                else subject.params["image"]
+            labels = subject.params["config"]["labels"] if "config" in subject.params \
+                else subject.params["labels"]
             self._killed_containers.setdefault(subject.cid, Stat(name))\
                 .record_new(reasons, image, labels, subject.check_source, user)
 
@@ -132,18 +132,18 @@ class Judge:
 
     @staticmethod
     def _get_name_info(container: Container) -> Tuple[bool, str]:
-        has_name = container.params and 'Name' in container.params
+        has_name = container.params and 'name' in container.params
         if has_name:
-            name = container.params['Name'][1:] if container.params['Name'].startswith('/') \
-                else container.params['Name']
+            name = container.params['name'][1:] if container.params['name'].startswith('/') \
+                else container.params['name']
         else:
             name = container.cid
         return has_name, name
 
     @staticmethod
     def _get_image_info(container: Container) -> str:
-        return container.params['Config']['Image'] if 'Image' in container.params['Config'] \
-            else container.params['Image']
+        return container.params['config']['image'] if 'image' in container.params['config'] \
+            else container.params['image']
 
     def _on_global_whitelist(self, container: Container) -> bool:
         has_name, name = self._get_name_info(container)
