@@ -11,6 +11,7 @@ from flask import logging
 from rx import Observer
 
 from dockerenforcer.docker_helper import CheckSource, Container, DockerHelper
+from dockerenforcer.docker_image_helper import DockerImageHelper
 from .config import Mode, Config
 from triggers.triggers import triggers
 
@@ -120,7 +121,7 @@ containers_stopped_total {0}
 
 class Judge:
     def __init__(self, rules: Rules, subject_type: str, config: Config, run_whitelists: bool=True,
-                 custom_whitelist_rules: Rules={}):
+                 custom_whitelist_rules: Rules={}, docker_image_helper: DockerImageHelper = None):
         super().__init__()
         self._custom_whitelist_rules = custom_whitelist_rules
         self._run_whitelists = run_whitelists
@@ -128,6 +129,7 @@ class Judge:
         self._rules = rules
         self._config = config
         self._whitelist_separator: str = config.white_list_separator
+        self._docker_image_helper: DockerImageHelper = docker_image_helper
         self._load_whitelists_from_config()
 
     @staticmethod
@@ -140,10 +142,14 @@ class Judge:
             name = container.cid
         return has_name, name
 
-    @staticmethod
-    def _get_image_info(container: Container) -> str:
-        return container.params['config']['image'] if 'image' in container.params['config'] \
+    def _get_image_info(self, container: Container) -> str:
+        image: str = container.params['config']['image'] if 'image' in container.params['config'] \
             else container.params['image']
+
+        if image.startswith("sha256:"):
+            image = self._docker_image_helper.get_image_uniq_tag_by_id(image)
+
+        return image
 
     def _on_global_whitelist(self, container: Container) -> bool:
         has_name, name = self._get_name_info(container)
