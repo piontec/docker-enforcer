@@ -33,6 +33,7 @@ class Config:
         self.stop_on_first_violation: bool = bool(os.getenv('STOP_ON_FIRST_VIOLATION', 'True') == 'True')
         self.log_authz_requests: bool = bool(os.getenv('LOG_AUTHZ_REQUESTS', 'False') == 'True')
         self.default_allow: bool = bool(os.getenv('DEFAULT_ACTION_ALLOW', 'True') == 'True')
+        self.default_allow: bool = bool(os.getenv('INVERT_RULES', 'False') == 'True')
         self.version: str = version
         self.white_list_separator: str = "|"
 
