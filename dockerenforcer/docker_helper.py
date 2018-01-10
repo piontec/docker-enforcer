@@ -165,9 +165,10 @@ class DockerHelper:
             new = {}
             for key in iterable.keys():
                 lower_key = key.lower()
-                new[lower_key] = iterable[key]
-                if type(new[lower_key]) is dict or type(new[lower_key]) is list:
-                    new[lower_key] = self.rename_keys_to_lower(new[lower_key])
+                if type(iterable[key]) is dict or type(iterable[key]) is list:
+                    new[lower_key] = self.rename_keys_to_lower(iterable[key])
+                else:
+                    new[lower_key] = iterable[key]
         elif type(iterable) is list:
             new = []
             for item in iterable:
