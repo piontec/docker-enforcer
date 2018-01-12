@@ -143,6 +143,7 @@ class DockerHelper:
             return {}
         logger.debug("[{0}] Params fetched for {1}".format(threading.current_thread().name, container_id))
 
+        params = self.rename_keys_to_lower(params)
         if not self._config.cache_params:
             return params
 
@@ -157,6 +158,24 @@ class DockerHelper:
 
     def remove_from_cache(self, container_id: str) -> None:
         self._params_cache.pop(container_id, None)
+
+    def rename_keys_to_lower(self, iterable):
+        new = None
+        if type(iterable) is dict:
+            new = {}
+            for key in iterable.keys():
+                lower_key = key.lower()
+                if type(iterable[key]) is dict or type(iterable[key]) is list:
+                    new[lower_key] = self.rename_keys_to_lower(iterable[key])
+                else:
+                    new[lower_key] = iterable[key]
+        elif type(iterable) is list:
+            new = []
+            for item in iterable:
+                new.append(self.rename_keys_to_lower(item))
+        else:
+            new = iterable
+        return new
 
     def get_events_observable(self) -> Iterable[Any]:
         successful = False
