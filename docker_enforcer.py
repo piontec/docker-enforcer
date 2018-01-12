@@ -255,7 +255,7 @@ def make_container_periodic_check_compatible(cont_json, url, owner):
     cont_json = docker_helper.rename_keys_to_lower(cont_json)
     cont_json["config"] = {}
     cont_json["config"]["labels"] = cont_json.get("labels", [])
-    cont_json["hostconfig"] = {} if "hostconfig" not in cont_json else cont_json["hostconfig"]
+    cont_json["hostconfig"] = cont_json.get("hostconfig", {})
     return Container(cont_json["name"], params=cont_json, metrics={}, position=0,
                      check_source=CheckSource.AuthzPlugin, owner=owner)
 
