@@ -20,12 +20,12 @@ class ApiContainerTest(unittest.TestCase):
     test_trigger = {"name": "set local flag", "trigger": lambda v: ApiContainerTest.set_trigger_flag()}
     forbid_privileged_rule = {
         "name": "can't use privileged or cap-add without being on the whitelist",
-        "rule": lambda c: c.params["hostconfig"]["privileged"] or c.params["hostConfig"]["capadd"] is not None
+        "rule": lambda c: c.params["hostconfig"]["privileged"] or c.params["hostconfig"]["capadd"] is not None
     }
     forbid_privileged_with_check_hostconfig_rule = {
         "name": "can't use privileged without being on the whitelist",
-        "rule": lambda c: "Privileged" in c.params["HostConfig"]
-                          and c.params["HostConfig"]["Privileged"] is not None
+        "rule": lambda c: "privileged" in c.params["hostconfig"]
+                          and c.params["hostconfig"]["privileged"] is not None
     }
 
     @staticmethod
