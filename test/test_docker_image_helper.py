@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import create_autospec
 
 import docker
+from docker.errors import NotFound
 
 from dockerenforcer.config import Config
 from dockerenforcer.docker_image_helper import DockerImageHelper
@@ -26,6 +27,11 @@ class DockerHelperTests(unittest.TestCase):
         self._client.inspect_image.return_value = {'RepoTags': []}
         image_tag = self._helper.get_image_uniq_tag_by_id(self._image_id)
         self._client.inspect_image.assert_called_once_with(self._image_id)
+        self.assertEqual(self._image_id, image_tag)
+
+    def test_get_image_uniq_tag_by_id__image_not_found(self):
+        self._client.inspect_image.side_effect = NotFound('Image not found')
+        image_tag = self._helper.get_image_uniq_tag_by_id(self._image_id)
         self.assertEqual(self._image_id, image_tag)
 
     def test_get_image_uniq_tag_by_id__when_single_repo_tag(self):
