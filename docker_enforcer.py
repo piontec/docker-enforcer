@@ -19,6 +19,7 @@ from urllib import parse
 
 from dockerenforcer.config import Config, ConfigEncoder, Mode
 from dockerenforcer.docker_helper import DockerHelper, Container, CheckSource
+from dockerenforcer.docker_image_helper import DockerImageHelper
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 from request_rules.request_rules import request_rules
@@ -27,7 +28,9 @@ from whitelist_rules.whitelist_rules import whitelist_rules
 config = Config()
 client: APIClient = APIClient(base_url=config.docker_socket, timeout=config.docker_req_timeout_sec)
 docker_helper = DockerHelper(config, client)
-judge = Judge(rules, "container", config, run_whitelists=True, custom_whitelist_rules=whitelist_rules)
+docker_image_helper = DockerImageHelper(config, client)
+judge = Judge(rules, "container", config, run_whitelists=True, custom_whitelist_rules=whitelist_rules,
+              docker_image_helper=docker_image_helper)
 requests_judge = Judge(request_rules, "request", config, run_whitelists=False)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
