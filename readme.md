@@ -65,14 +65,14 @@ will be ever stopped because of this rule).
 ```python
     {
         "name": "must have memory limit",
-        "rule": lambda c: c.params['HostConfig']['Memory'] == 0
+        "rule": lambda c: c.params['hostconfig']['memory'] == 0
     }
 ```
 2. Must have CPU quota set:
 ```python
     {
         "name": "must have CPU limit",
-        "rule": lambda c: c.params['HostConfig']['CpuQuota'] == 0
+        "rule": lambda c: c.params['hostconfig']['cpuquota'] == 0
     }
 ```
 3. Limit the number of containers running on the host:
@@ -86,7 +86,7 @@ will be ever stopped because of this rule).
 ```python
     {
         "name": "uses valid dirs for volumes",
-        "rule": lambda c: False if c.params['HostConfig']['Binds'] is None else not all([b.startswith("/opt/mnt1") or b.startswith("/opt/mnt2") for b in c.params['HostConfig']['Binds']])
+        "rule": lambda c: False if c.params['hostconfig']['binds'] is None else not all([b.startswith("/opt/mnt1") or b.startswith("/opt/mnt2") for b in c.params['hostconfig']['binds']])
     }
 ```
 
