@@ -31,7 +31,7 @@ can protect it from stopping itself by using the white list contains rules to ne
 named 'docker-enforcer' or 'docker_enforcer'.
 - You can always exclude some containers from being killed due to rules evaluation by including their
 name in the white list (see configuration options).
- 
+
 ### Preparing the rules file
 Docker-enforcer works by checking a set of rules against the containers that are running on the docker
 host. Each of the rules is applied to data about each container. Rules indicate which container should
@@ -44,7 +44,7 @@ data that can be checked by a rule includes the following properties:
 date,
 - `params` - a dictionary of parameters used to start this container (for example with `docker run`),
 - `metrics` - a dictionary of performance metrics reported by the docker daemon for the container.
- 
+
 The rules file is evaluated against all running containers each `CHECK_INTERVAL_S` seconds. Also, all
 rules are evaluated against a single container, when the container is being started.
 The very basic rules file, that doesn't stop any container looks like this (this is also the default
@@ -64,7 +64,7 @@ will be ever stopped because of this rule).
 1. All containers must have memory limits set:
 ```python
     {
-        "name": "must have memory limit", 
+        "name": "must have memory limit",
         "rule": lambda c: c.params['HostConfig']['Memory'] == 0
     }
 ```
@@ -103,7 +103,7 @@ rules = [
 ```
 
 You can see an example of the full list of parameters available (except `position`) in the file
-[test_helpers.py](test_helpers.py).
+[test_helpers.py](test/test_helpers.py).
 
 ### Configuration options
 All the configuration options are loaded from environment variables, which makes them pretty easy to
@@ -206,7 +206,7 @@ by docker daemon for anyone willing to act on it. Docker enforcer listens for th
 all rules against the single container related to the event signalled by the docker daemon.
 
 #### Authz plugin mode
-In this mode, Docker Enforcer runs as
+In this mode, Docker Enforcer runs as a
 [docker authorization plugin](https://docs.docker.com/engine/extend/plugins_authorization/). As a result,
 your users won't even be able to complete an API call that has parameters that don't validate with your
 rules. In that case, an error message is returned to the user and the call is not executed by docker. This
@@ -302,11 +302,10 @@ run; makes sense only when "RUN_PERIODIC" is True
 - `/rules` - allows you to view the configured set of rules,
 - `/request_rules` - allows you to view the configured set of request rules,
 - `/triggers` - allows you to view the configured set of triggers.
-  
+
 Additionally, for `/` and `/recent` endpoints, you can append the following options in the URL (like:
 `http://localhost:8888/?show_all_violated_rules=1&show_image_and_labels=1`):
 - show_all_violated_rules=1 - if STOP_ON_FIRST_VIOLATION is set to False, then enabling this option will
 show all violated rules; normally only the first one is reported,
 - show_image_and_labels=1 - for any detected violation, show additionally image name used to start the
 container and all of its labels.
-
