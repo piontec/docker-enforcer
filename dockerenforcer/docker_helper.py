@@ -194,7 +194,7 @@ class DockerHelper:
 
     def kill_container(self, container: Container) -> None:
         try:
-            self._client.stop(container.params['Id'])
+            self._client.stop(container.params['id'])
         except (ReadTimeout, ProtocolError) as e:
             logger.error("Communication error when stopping container {0}: {1}".format(container.cid, e))
         except Exception as e:

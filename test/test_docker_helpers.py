@@ -25,8 +25,8 @@ class DockerHelperTests(unittest.TestCase):
         self._helper = DockerHelper(self._config, self._client)
         self._cid = "cont_id1"
         self._cid2 = "cont_id2"
-        self._params = {"Id": self._cid, "param1": "1"}
-        self._params2 = {"Id": self._cid2, "param1": "2"}
+        self._params = {"id": self._cid, "param1": "1"}
+        self._params2 = {"id": self._cid2, "param1": "2"}
 
     def test_kill_container(self):
         c = Container(self._cid, params=self._params, metrics={}, position=0, check_source=CheckSource.Periodic)
