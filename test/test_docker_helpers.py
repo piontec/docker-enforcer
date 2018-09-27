@@ -14,7 +14,7 @@ class ContainerTests(unittest.TestCase):
         self.assertEqual("123", str(container))
 
     def test_create_with_name(self):
-        container = Container("123", {"Name": "container1"}, {"cpu": 7}, 0, CheckSource.Periodic)
+        container = Container("123", {"name": "container1"}, {"cpu": 7}, 0, CheckSource.Periodic)
         self.assertEqual("container1", str(container))
 
 

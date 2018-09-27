@@ -34,7 +34,7 @@ class Container:
         self.owner: str = owner
 
     def __str__(self, *args, **kwargs) -> str:
-        return self.params.get('Name', self.cid)
+        return self.params.get('name', self.cid)
 
 
 class DockerHelper:
