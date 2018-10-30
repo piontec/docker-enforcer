@@ -9,7 +9,7 @@ MarkupSafe==1.0
 packaging==16.8
 Pygments==2.2.0
 pyparsing==2.2.0
-requests==2.13.0
+requests==2.20.0
 Rx==1.5.9
 six==1.10.0
 websocket-client==0.40.0
