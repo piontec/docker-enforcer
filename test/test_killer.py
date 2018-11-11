@@ -1,5 +1,6 @@
 import unittest
 from dockerenforcer.config import Config
+from dockerenforcer.killer import StatusDictionary
 from .test_helpers import RulesTestHelper
 
 
@@ -37,6 +38,18 @@ class ParamsRulesTests(TestsWithVerdicts):
                   and c.params['hostconfig']['cpuperiod'] == 0}]
         self.assertFalse(RulesTestHelper(rules, cpu_period=50000, cpu_quota=50000).get_verdicts()[0].verdict)
         self.assertTrue(RulesTestHelper(rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
+
+class StatusDictionaryTests(TestsWithVerdicts):
+    def test_correct_image(self):
+        rules = [{"name": "always True", "rule": lambda c: True}]
+        verdict_descr = RulesTestHelper(rules).get_verdicts()[0]
+        self.assertTrue(verdict_descr.verdict)
+
+        status = StatusDictionary()
+        status.register_killed(verdict_descr)
+
+        stat = list(status.get_items())[0]
+        self.assertEqual('busybox', stat[1].image)
 
 
 class MetricsRulesTests(TestsWithVerdicts):

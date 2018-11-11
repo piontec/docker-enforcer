@@ -69,7 +69,7 @@ class StatusDictionary:
         with self._padlock:
             name = subject.params["name"]
             image = subject.params["config"]["image"] \
-                if "Config" in subject.params and "image" in subject.params["config"] \
+                if "config" in subject.params and "image" in subject.params["config"] \
                 else subject.params["image"]
             labels = subject.params["config"]["labels"] if "config" in subject.params \
                 else subject.params["labels"]
