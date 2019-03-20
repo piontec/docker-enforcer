@@ -70,7 +70,7 @@ class StatusDictionary:
             name = subject.params["name"]
             image = subject.params["config"]["image"] \
                 if "config" in subject.params and "image" in subject.params["config"] \
-                else subject.params["image"]
+                else (subject.params['image'] if 'image' in subject.params else 'UNDEFINED')
             labels = subject.params["config"]["labels"] if "config" in subject.params \
                 else subject.params["labels"]
             self._killed_containers.setdefault(subject.cid, Stat(name))\
@@ -144,7 +144,7 @@ class Judge:
 
     def _get_image_info(self, container: Container) -> str:
         image: str = container.params['config']['image'] if 'image' in container.params['config'] \
-            else container.params['image']
+            else (container.params['image'] if 'image' in container.params else 'UNDEFINED')
 
         if image.startswith("sha256:"):
             image = self._docker_image_helper.get_image_uniq_tag_by_id(image)

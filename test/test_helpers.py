@@ -7,10 +7,10 @@ from dockerenforcer.killer import Judge
 
 class RulesTestHelper:
     def __init__(self, rules, config=Config(), container_count=1, mem_limit=0, cpu_share=0, cpu_period=0, cpu_quota=0,
-                 mem_usage=0):
+                 mem_usage=0, container_params={}):
         self.judge = Judge(rules, "container", config)
         cid = '7de82a4e90f1bd4fd022bcce298e7277b8aec009e222892e44769d6c636b8205'
-        params = {'Image': 'sha256:47bcc53f74dc94b1920f0b34f6036096526296767650f223433fe65c35f149eb',
+        params = container_params if container_params else {'Image': 'sha256:47bcc53f74dc94b1920f0b34f6036096526296767650f223433fe65c35f149eb',
                   'HostConfig': {'Isolation': '', 'IOMaximumBandwidth': 0, 'CpuPercent': 0, 'ReadonlyRootfs': False,
                                  'CpuQuota': cpu_quota, 'IpcMode': '', 'RestartPolicy': {'Name': 'no', 'MaximumRetryCount': 0},
                                  'BlkioDeviceWriteIOps': None, 'PidMode': '', 'BlkioDeviceWriteBps': None,
