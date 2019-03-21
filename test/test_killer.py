@@ -1,5 +1,6 @@
 import unittest
 from dockerenforcer.config import Config
+from dockerenforcer.killer import StatusDictionary
 from .test_helpers import RulesTestHelper
 
 
@@ -37,6 +38,69 @@ class ParamsRulesTests(TestsWithVerdicts):
                   and c.params['hostconfig']['cpuperiod'] == 0}]
         self.assertFalse(RulesTestHelper(rules, cpu_period=50000, cpu_quota=50000).get_verdicts()[0].verdict)
         self.assertTrue(RulesTestHelper(rules, cpu_period=0, cpu_quota=0).get_verdicts()[0].verdict)
+
+class CorrectImageNameTests(TestsWithVerdicts):
+    def test_correct_image_verdicts(self):
+        rules = [{"name": "always True", "rule": lambda c: True}]
+
+        test_cases = [
+            {
+                "params": {"config": {"image": "busybox2", "labels": {}}, "image": "sha256:47bcffff", "name": "test1"},
+                "expected_image": "busybox2"
+            },
+            {
+                "params": {"config": {"labels": {}}, "name": "test2"},
+                "expected_image": "UNDEFINED"
+            }
+        ]
+
+        for test in test_cases:
+            params = test["params"]
+
+            verdict_descr = RulesTestHelper(rules, container_params=params).get_verdicts()[0]
+            self.assertTrue(verdict_descr.verdict)
+
+            status = StatusDictionary()
+            status.register_killed(verdict_descr)
+
+            stat = list(status.get_items())[0]
+            self.assertEqual(test["expected_image"], stat[1].image)
+
+    def test_correct_image_in_whitelists(self):
+        rules = [{"name": "always True", "rule": lambda c: True}]
+
+        test_cases = [
+            {
+                "params": {"config": {"image": "busybox2", "labels": {}}, "image": "sha256:47bcffff", "name": "test1"},
+                "image_white_list": ["busybox2"],
+                "expected_verdict": False
+            },
+            {
+                "params": {"config": {"labels": {}}, "name": "test2"},
+                "image_white_list": ["UNDEFINED"],
+                "expected_verdict": False
+            },
+            {
+                "params": {"config": {"image": "busybox2", "labels": {}}, "image": "sha256:47bcffff", "name": "test1"},
+                "image_white_list": [],
+                "expected_verdict": True
+            },
+            {
+                "params": {"config": {"labels": {}}, "name": "test2"},
+                "image_white_list": [],
+                "expected_verdict": True
+            }
+
+        ]
+
+        for test in test_cases:
+            params = test["params"]
+
+            config = Config()
+            config.image_white_list = test["image_white_list"]
+
+            verdict_descr = RulesTestHelper(rules, container_params=params, config=config).get_verdicts()[0]
+            self.assertEquals(test["expected_verdict"], verdict_descr.verdict)
 
 
 class MetricsRulesTests(TestsWithVerdicts):
