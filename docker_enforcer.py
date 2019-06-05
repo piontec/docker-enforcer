@@ -39,8 +39,7 @@ trigger_handler = TriggerHandler()
 containers_regex = re.compile("^(/v.+?)?/containers/.+?$")
 containers_start_regexp = re.compile("^(/v.+?)?/containers/(.+?)/rename\\?name=(.+?)$", re.IGNORECASE)
 
-if config.check_authz_start_requests:
-    start_requests_judge = Judge(start_request_rules, "request", config, run_whitelists=True)
+start_requests_judge = Judge(start_request_rules, "request", config, run_whitelists=True)
 
 
 def create_app():
@@ -151,6 +150,10 @@ def show_rules():
 @app.route('/request_rules')
 def show_request_rules():
     return python_file_to_json(request, "request_rules/request_rules.py")
+
+@app.route('/start_request_rules')
+def show_start_request_rules():
+    return python_file_to_json(request, "request_rules/start_request_rules.py")
 
 
 @app.route('/triggers')
