@@ -8,6 +8,7 @@ from base64 import b64decode
 from logging import StreamHandler
 
 from docker import APIClient
+from docker.errors import NotFound
 from flask import Flask, Response, request
 from pygments import highlight
 from pygments.formatters.html import HtmlFormatter
@@ -23,6 +24,7 @@ from dockerenforcer.docker_image_helper import DockerImageHelper
 from dockerenforcer.killer import Killer, Judge, TriggerHandler
 from rules.rules import rules
 from request_rules.request_rules import request_rules
+from request_rules.start_request_rules import start_request_rules
 from whitelist_rules.whitelist_rules import whitelist_rules
 
 config = Config()
@@ -35,6 +37,9 @@ requests_judge = Judge(request_rules, "request", config, run_whitelists=False)
 jurek = Killer(docker_helper, config.mode)
 trigger_handler = TriggerHandler()
 containers_regex = re.compile("^(/v.+?)?/containers/.+?$")
+containers_start_regexp = re.compile("^(/v.+?)?/containers/(.+?)/rename\\?name=(.+?)$", re.IGNORECASE)
+
+start_requests_judge = Judge(start_request_rules, "request", config, run_whitelists=True)
 
 
 def create_app():
@@ -146,6 +151,10 @@ def show_rules():
 def show_request_rules():
     return python_file_to_json(request, "request_rules/request_rules.py")
 
+@app.route('/start_request_rules')
+def show_start_request_rules():
+    return python_file_to_json(request, "request_rules/start_request_rules.py")
+
 
 @app.route('/triggers')
 def show_triggers():
@@ -229,15 +238,27 @@ def authz_request():
         return process_positive_verdict(verdict, json_data, register=False)
 
     operation = url.path.split("/")[-1]
-    if containers_regex.match(url.path) and operation == "create" and "requestbody" in json_data:
-        int_bytes = b64decode(json_data["requestbody"])
-        int_json = json.loads(int_bytes.decode(request.charset))
+    if containers_regex.match(url.path):
         tls_user = json_data["user"] if "user" in json_data and json_data["user"] != '' else "[unknown]"
-        int_json = docker_helper.rename_keys_to_lower(int_json)
-        container = make_container_periodic_check_compatible(int_json, url, tls_user)
-        verdict = judge.should_be_killed(container)
-        if verdict.verdict:
-            return process_positive_verdict(verdict, json_data)
+        if operation == "create" and "requestbody" in json_data:
+            int_bytes = b64decode(json_data["requestbody"])
+            int_json = json.loads(int_bytes.decode(request.charset))
+            int_json = docker_helper.rename_keys_to_lower(int_json)
+            container = make_container_periodic_check_compatible(int_json, url, tls_user)
+
+            if config.merge_image_labels_when_check_authz_create_requests:
+                container.params["config"]["labels"] = docker_image_helper.merge_container_and_image_labels(container)
+
+            verdict = judge.should_be_killed(container)
+            if verdict.verdict:
+                return process_positive_verdict(verdict, json_data)
+        elif operation == "start" and request.method == "POST" and config.check_authz_start_requests:
+            container_id = url.path.split("/")[-2]
+            container = docker_helper.check_container(container_id, CheckSource.AuthzPlugin, True)
+            verdict = start_requests_judge.should_be_killed(container)
+            if verdict.verdict:
+                return process_positive_verdict(verdict, json_data)
+
     return to_formatted_json(json.dumps({"Allow": True}))
 
 

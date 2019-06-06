@@ -6,8 +6,9 @@ from unittest import mock
 
 from flask import Response
 
-from docker_enforcer import app, judge, config, requests_judge, trigger_handler
+from docker_enforcer import app, judge, config, requests_judge, trigger_handler, start_requests_judge, docker_helper
 from dockerenforcer.config import Mode
+from dockerenforcer.docker_helper import Container, CheckSource
 from test.test_helpers import ApiTestHelper, DefaultRulesHelper
 
 
@@ -16,6 +17,8 @@ class ApiContainerTest(unittest.TestCase):
     cp_request_rule_regexp = re.compile("^/v1\.[23]\d/containers/test/archive$")
     cp_request_rule = {"name": "cp not allowed", "rule": lambda r, x=cp_request_rule_regexp:
                        r['requestmethod'] in ['GET', 'HEAD'] and x.match(r['parseduri'].path)}
+    start_request_rule = {"name": "start not allowed", "rule": lambda r: True}
+
     test_trigger_flag = False
     test_trigger = {"name": "set local flag", "trigger": lambda v: ApiContainerTest.set_trigger_flag()}
     forbid_privileged_rule = {
@@ -36,6 +39,7 @@ class ApiContainerTest(unittest.TestCase):
     def setUpClass(cls):
         config.mode = Mode.Kill
         config.log_authz_requests = True
+        config.check_authz_start_requests = True
         cls.de = app
         cls.de.testing = True
         cls.app = cls.de.test_client()
@@ -47,6 +51,13 @@ class ApiContainerTest(unittest.TestCase):
         judge._per_rule_whitelist = {}
         judge._image_per_rule_whitelist = {}
         judge._custom_whitelist_rules = {}
+
+        start_requests_judge._rules = []
+        start_requests_judge._global_whitelist = []
+        start_requests_judge._image_global_whitelist = []
+        start_requests_judge._per_rule_whitelist = {}
+        start_requests_judge._image_per_rule_whitelist = {}
+        start_requests_judge._custom_whitelist_rules = {}
 
     def _check_response(self, response, allow, msg=None, code=200):
         self.assertEqual(response.status_code, code)
@@ -79,6 +90,56 @@ class ApiContainerTest(unittest.TestCase):
         requests_judge._rules = [self.cp_request_rule]
         res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_copy_to_cont)
         self._check_response(res, False, "cp not allowed")
+
+    def test_start_request_rule(self):
+        params = {'name': 'test', 'config': {'image': 'test', 'labels': {}}}
+        test_containers = Container('6b5d46fc77fb2f182ead9a16e2dd5ea444fcbf94754c7704e459d0aa28bb6b11', params, {}, 0,
+                              CheckSource.AuthzPlugin)
+
+        start_requests_judge._rules = [self.start_request_rule]
+        with mock.patch.object(docker_helper, 'check_container') as mock_check_container:
+            mock_check_container.return_value = test_containers
+
+            res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_start_container)
+            self._check_response(res, False, self.start_request_rule['name'])
+
+            mock_check_container.assert_called_with('6b5d46fc77fb2f182ead9a16e2dd5ea444fcbf94754c7704e459d0aa28bb6b11',
+                                                    CheckSource.AuthzPlugin, True)
+
+    def test_start_request_rule_but_on_whitelist(self):
+        params = {'name': 'test', 'config': {'image': 'test_image', 'labels': {}}}
+        test_containers = Container('6b5d46fc77fb2f182ead9a16e2dd5ea444fcbf94754c7704e459d0aa28bb6b11', params, {}, 0,
+                                    CheckSource.AuthzPlugin)
+
+        def global_whitelist():
+            start_requests_judge._global_whitelist = [re.compile('^test$')]
+
+        def image_global_whitelist():
+            start_requests_judge._global_whitelist = []
+            start_requests_judge._image_global_whitelist = [re.compile('^test_image$')]
+
+        def per_rule_whitelist():
+            start_requests_judge._image_global_whitelist = []
+            start_requests_judge._per_rule_whitelist = {self.start_request_rule['name']: [re.compile('^tes.*$')]}
+
+        def image_per_rule_whitelist():
+            start_requests_judge._per_rule_whitelist = {}
+            start_requests_judge._image_per_rule_whitelist = {self.start_request_rule['name']: [re.compile('^test_ima.*$')]}
+
+        tests_parameters = [global_whitelist, image_global_whitelist, per_rule_whitelist, image_per_rule_whitelist]
+
+        for modifier in tests_parameters:
+            with self.subTest(modifier.__name__):
+                start_requests_judge._rules = [self.start_request_rule]
+                modifier()
+                with mock.patch.object(docker_helper, 'check_container') as mock_check_container:
+                    mock_check_container.return_value = test_containers
+
+                    res = self.app.post('/AuthZPlugin.AuthZReq', data=ApiTestHelper.authz_req_start_container)
+                    self._check_response(res, True)
+
+                    mock_check_container.assert_called_with('6b5d46fc77fb2f182ead9a16e2dd5ea444fcbf94754c7704e459d0aa28bb6b11',
+                                                            CheckSource.AuthzPlugin, True)
 
     def test_trigger_when_rule_fails_run_with_mem_check(self):
         judge._rules = [self.mem_rule]
@@ -208,4 +269,12 @@ class ApiInfoTest(unittest.TestCase):
 
     def test_fetch_request_rules_html(self):
         res = self.app.get('/request_rules', headers={"Accept": "text/html"})
+        self._check_rules_response(res, "text/html")
+
+    def test_fetch_start_request_rules(self):
+        res = self.app.get('/start_request_rules')
+        self._check_rules_response(res, "application/json", DefaultRulesHelper.start_request_rules)
+
+    def test_fetch_start_request_rules_html(self):
+        res = self.app.get('/start_request_rules', headers={"Accept": "text/html"})
         self._check_rules_response(res, "text/html")

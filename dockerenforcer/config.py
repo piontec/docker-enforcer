@@ -4,7 +4,7 @@ import os
 import copy
 from typing import Dict
 
-version = "0.8.15"
+version = "0.8.16-aurea-dev-1"
 
 
 class Mode(Enum):
@@ -32,6 +32,8 @@ class Config:
         self.immediate_periodical_start: bool = bool(os.getenv('IMMEDIATE_PERIODICAL_START', 'False') == 'True')
         self.stop_on_first_violation: bool = bool(os.getenv('STOP_ON_FIRST_VIOLATION', 'True') == 'True')
         self.log_authz_requests: bool = bool(os.getenv('LOG_AUTHZ_REQUESTS', 'False') == 'True')
+        self.check_authz_start_requests: bool = bool(os.getenv('CHECK_AUTHZ_START_REQUESTS', 'False') == 'True')
+        self.merge_image_labels_when_check_authz_create_requests: bool = bool(os.getenv('MERGE_IMAGE_LABELS_WHEN_CHECK_AUTHZ_CREATE_REQUESTS', 'False') == 'True')
         self.default_allow: bool = bool(os.getenv('DEFAULT_ACTION_ALLOW', 'True') == 'True')
         self.version: str = version
         self.white_list_separator: str = "|"
