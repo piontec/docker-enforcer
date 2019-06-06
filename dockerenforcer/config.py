@@ -4,7 +4,7 @@ import os
 import copy
 from typing import Dict
 
-version = "0.8.15-aurea-dev"
+version = "0.8.16-aurea-dev-1"
 
 
 class Mode(Enum):

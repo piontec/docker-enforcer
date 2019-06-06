@@ -4,7 +4,7 @@ docker==2.2.1
 docker-pycreds==0.2.1
 Flask==0.12.4
 itsdangerous==0.24
-Jinja2==2.9.6
+Jinja2==2.10.1
 MarkupSafe==1.0
 packaging==16.8
 Pygments==2.2.0
