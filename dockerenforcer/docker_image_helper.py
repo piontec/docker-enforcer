@@ -43,4 +43,13 @@ class DockerImageHelper:
         return final_labels
 
     def merge_dicts(self, image_labels, container_labels):
+        if image_labels is None and container_labels is None:
+            return None
+
+        if not image_labels:
+            return container_labels
+
+        if not container_labels:
+            return image_labels
+
         return {**image_labels, **container_labels}

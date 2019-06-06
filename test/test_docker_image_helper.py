@@ -65,3 +65,17 @@ class DockerHelperTests(unittest.TestCase):
         self.assertIn('label3', final_labels)
         self.assertEquals('label3_container_value', final_labels['label3'])
 
+    def test_merge_dicts(self):
+        image_labels = {'label1': 'label1_image_value', 'label2': 'label2_image_value'}
+        container_labels = {'label2': 'label2_container_value', 'label3': 'label3_container_value'}
+
+        res = self._helper.merge_dicts(None, None)
+        self.assertIsNone(res)
+
+        res = self._helper.merge_dicts(image_labels, None)
+        self.assertEqual(image_labels, res)
+
+        res = self._helper.merge_dicts(None, container_labels)
+        self.assertEqual(container_labels, res)
+
+
