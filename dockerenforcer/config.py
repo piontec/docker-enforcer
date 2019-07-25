@@ -4,7 +4,7 @@ import os
 import copy
 from typing import Dict
 
-version = "0.8.15"
+version = "0.8.16"
 
 
 class Mode(Enum):

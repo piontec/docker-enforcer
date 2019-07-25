@@ -3,11 +3,11 @@ import threading
 from json import JSONDecodeError
 
 import time
+import logging
 from typing import Dict, Any, Iterable, Optional
 
 from docker import APIClient
 from docker.errors import NotFound
-from flask import logging
 from requests import ReadTimeout
 from requests.packages.urllib3.exceptions import ProtocolError
 
