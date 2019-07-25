@@ -2,12 +2,12 @@ import json
 import threading
 import datetime
 import re
+import logging
 from copy import deepcopy
 
 import itertools
 from typing import Optional, Dict, Iterable, Callable, Any, Tuple, Union
 
-from flask import logging
 from rx import Observer
 
 from dockerenforcer.docker_helper import CheckSource, Container, DockerHelper
