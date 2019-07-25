@@ -1,9 +1,10 @@
+import logging
+
 from functools import lru_cache
 from typing import Any, Dict
 
 from docker import APIClient
 from docker.errors import NotFound
-from flask import logging
 
 from dockerenforcer.config import Config
 

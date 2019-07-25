@@ -1,7 +1,7 @@
 import json
 import threading
+import logging
 
-from flask import logging
 
 logger = logging.getLogger("docker_enforcer")
 
