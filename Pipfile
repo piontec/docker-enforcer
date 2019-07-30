@@ -1,0 +1,29 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+nose = "*"
+coverage = "*"
+
+[packages]
+appdirs = "*"
+click = "~=6.7"
+docker = "*"
+docker-pycreds = "*"
+itsdangerous = "*"
+pyparsing = "*"
+requests = "*"
+six = "*"
+Flask = "*"
+Jinja2 = "*"
+MarkupSafe = "*"
+Pygments = "*"
+Rx = "~=1.5"
+websocket_client = "*"
+Werkzeug = "*"
+gunicorn = "*"
+
+[requires]
+python_version = "3.7"

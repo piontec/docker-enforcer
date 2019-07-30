@@ -1,9 +1,10 @@
 FROM python:3-windowsservercore
 MAINTAINER Georgy Turevich <georgy.turevich@gmail.com>
 
-COPY requirements*.txt C:/docker_enforcer/
+COPY Pipfile* C:/docker_enforcer/
 WORKDIR C:/docker_enforcer/
-RUN pip install -r requirements-win.txt
+RUN pip install pipenv
+RUN pipenv --deploy --ignore-pipfile --system
 COPY . C:/docker_enforcer/
 
 ENV FLASK_APP docker_enforcer.py
