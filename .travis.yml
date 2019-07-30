@@ -3,10 +3,10 @@ python:
   - "3.6"
 sudo: false
 before_install:
-  - pip install coveralls
+  - pip install coveralls pipenv
 install:
-  - pip install -r requirements-dev.txt
+  - pipenv install --deploy --ignore-pipfile --system --dev
 script:
   nosetests --with-coverage --cover-package docker_enforcer,dockerenforcer
 after_success:
-    - coveralls
+  - coveralls

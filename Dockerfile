@@ -1,9 +1,10 @@
 FROM python:3-alpine
 MAINTAINER Łukasz Piątkowski <piontec@gmail.com>
 
-COPY requirements*.txt /opt/docker_enforcer/
+COPY Pipfile* /opt/docker_enforcer/
 WORKDIR /opt/docker_enforcer/
-RUN pip install -r requirements-prod.txt
+RUN pip install pipenv
+RUN pipenv install --deploy --ignore-pipfile --system
 COPY . /opt/docker_enforcer/
 
 ENTRYPOINT ["gunicorn"]
