@@ -1,6 +1,6 @@
 language: python
 python:
-  - "3.6"
+  - "3.7"
 sudo: false
 before_install:
   - pip install coveralls pipenv
